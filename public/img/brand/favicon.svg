@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#0f3d25"/>
+      <stop offset="0.65" stop-color="#061116"/>
+      <stop offset="1" stop-color="#020405"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffe739"/>
+      <stop offset="1" stop-color="#f2bf12"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="26" fill="#05090c"/>
+  <path d="M64 17 108 33v46c0 28-18 45-44 58-26-13-44-30-44-58V33Z" fill="#f5f7f8"/>
+  <path d="M64 24 99 37v41c0 23-14 37-35 48-21-11-35-25-35-48V37Z" fill="url(#bg)"/>
+  <path d="M31 42 64 30l33 12v11c-22-12-44-12-66 0Z" fill="#22d463"/>
+  <path d="M97 42v36c0 18-8 30-22 40l10-18c7-7 11-15 11-25Z" fill="url(#gold)"/>
+  <path d="M32 98c9 8 20 14 32 20 7-3 13-7 19-11H64c-12 0-23-3-32-9Z" fill="#176fe5"/>
+  <text x="64" y="79" text-anchor="middle" font-family="Arial Black, Impact, Arial, sans-serif" font-size="34" font-weight="900" fill="#ffffff" letter-spacing="-2">BPB</text>
+  <path d="m64 4 4 11h12l-10 7 4 11-10-7-10 7 4-11-10-7h12Z" fill="url(#gold)"/>
+</svg>

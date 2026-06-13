@@ -3,17 +3,16 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#071018">
     <title><%= title %> | <%= settings.appName %></title>
+    <link rel="icon" type="image/svg+xml" href="/img/brand/favicon.svg">
+    <link rel="manifest" href="/site.webmanifest">
     <link rel="stylesheet" href="/css/styles.css">
   </head>
   <body>
     <header class="topbar">
       <a class="brand" href="/">
-        <span class="brand-mark"><span>BPB</span></span>
-        <span class="brand-copy">
-          <strong>BOLAO PALPITES</strong>
-          <small>BRASIL</small>
-        </span>
+        <img class="brand-logo" src="/img/brand/logo-horizontal.svg" alt="Bolao Palpites Brasil">
       </a>
       <nav class="nav">
         <a class="<%= currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites') ? 'active' : '' %>" href="<%= navGamesHref %>">Jogos</a>

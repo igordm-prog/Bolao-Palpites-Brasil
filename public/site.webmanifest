@@ -1,0 +1,16 @@
+{
+  "name": "Bolao Palpites Brasil",
+  "short_name": "BPB",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#05090c",
+  "theme_color": "#071018",
+  "icons": [
+    {
+      "src": "/img/brand/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

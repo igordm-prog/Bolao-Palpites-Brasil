@@ -77,17 +77,9 @@ body:has(.betting-page) .brand {
   gap: 12px;
 }
 
-body:has(.betting-page) .brand-mark {
-  width: 52px;
-  height: 52px;
-}
-
-body:has(.betting-page) .brand strong {
-  font-size: 1.22rem;
-}
-
-body:has(.betting-page) .brand small {
-  font-size: 0.82rem;
+body:has(.betting-page) .brand-logo {
+  width: 218px;
+  height: 70px;
 }
 
 body:has(.betting-page) .nav {
@@ -116,68 +108,14 @@ body:has(.betting-page) .nav a.active::after {
   color: #fff;
 }
 
-.brand-mark {
-  position: relative;
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 50%, #071018 0 28%, transparent 29%),
-    linear-gradient(135deg, #12a84d 0 44%, #ffd43b 44% 62%, #1647b8 62% 100%);
-  border: 1px solid rgba(255, 212, 59, 0.65);
-  border-radius: 14px;
-  box-shadow: 0 0 0 4px rgba(255, 212, 59, 0.08), 0 14px 34px rgba(0, 0, 0, 0.3);
-}
-
-.brand-mark span {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  color: #ffffff;
-  background: rgba(6, 13, 17, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 50%;
-  font-size: 0.68rem;
-  font-weight: 950;
-  letter-spacing: 0;
-}
-
-.brand-mark::before {
-  position: absolute;
-  inset: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.36);
-  border-radius: 50%;
-  content: "";
-}
-
-.brand-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.brand strong {
+.brand-logo {
   display: block;
-  font-size: clamp(1rem, 1.55vw, 1.28rem);
-  line-height: 0.96;
-  letter-spacing: 0;
-  white-space: nowrap;
+  width: clamp(176px, 18vw, 248px);
+  height: 58px;
+  object-fit: contain;
+  object-position: left center;
 }
 
-.brand small {
-  color: var(--green);
-  font-weight: 900;
-  font-size: 0.78rem;
-  letter-spacing: 0;
-  white-space: nowrap;
-}
-
-.brand small,
 .card small,
 td small {
   display: block;
@@ -341,6 +279,14 @@ td small {
   border-radius: 50%;
   transform: translate(-50%, -50%);
   content: "";
+}
+
+.hero-brand-mark {
+  position: absolute;
+  top: 24px;
+  left: 28px;
+  width: min(170px, 38%);
+  filter: drop-shadow(0 18px 26px rgba(0, 0, 0, 0.52));
 }
 
 .score-card {
@@ -593,34 +539,11 @@ dd {
 }
 
 .login-icon {
-  display: grid;
   width: 56px;
   height: 56px;
-  place-items: center;
-  background: rgba(53, 196, 71, 0.13);
-  border: 1px solid rgba(53, 196, 71, 0.38);
+  background: rgba(34, 212, 99, 0.08) url("/img/brand/favicon.svg") center / 44px 44px no-repeat;
+  border: 1px solid rgba(34, 212, 99, 0.38);
   border-radius: 8px;
-}
-
-.login-icon::before {
-  width: 24px;
-  height: 18px;
-  border: 3px solid var(--green);
-  border-top: 0;
-  border-radius: 4px;
-  box-shadow: 0 -13px 0 -6px transparent;
-  content: "";
-}
-
-.login-icon::after {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 3px solid var(--green);
-  border-bottom: 0;
-  border-radius: 14px 14px 0 0;
-  transform: translateY(-14px);
-  content: "";
 }
 
 .login-card input {
@@ -2246,17 +2169,9 @@ th {
     padding: 8px clamp(16px, 2vw, 28px);
   }
 
-  body:has(.betting-page) .brand-mark {
-    width: 46px;
-    height: 46px;
-  }
-
-  body:has(.betting-page) .brand strong {
-    font-size: 1.16rem;
-  }
-
-  body:has(.betting-page) .brand small {
-    font-size: 0.82rem;
+  body:has(.betting-page) .brand-logo {
+    width: clamp(176px, 18vw, 248px);
+    height: 58px;
   }
 
   body:has(.betting-page) .nav {
