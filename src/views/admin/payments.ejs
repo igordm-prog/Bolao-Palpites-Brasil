@@ -18,7 +18,12 @@
               <td><%= payment.pool?.name || "Carteira" %></td>
               <td><%= formatMoney(payment.amount) %></td>
               <td><span class="badge"><%= labelForStatus(payment.status) %></span></td>
-              <td><%= payment.transactionId || "-" %></td>
+              <td>
+                <%= payment.transactionId || payment.providerPaymentId || "-" %>
+                <% if (payment.providerStatus) { %>
+                  <small>Asaas: <%= payment.providerStatus %></small>
+                <% } %>
+              </td>
               <td>
                 <% if (payment.type === "deposit") { %>
                   <form class="inline-form" action="/admin/pagamentos/<%= payment.id %>/status" method="post">
@@ -28,6 +33,11 @@
                     <input name="transactionId" placeholder="ID transacao">
                     <button class="button small" type="submit">Salvar</button>
                   </form>
+                  <% if (payment.provider === "asaas" && payment.providerPaymentId) { %>
+                    <form class="inline-form" action="/admin/pagamentos/<%= payment.id %>/sincronizar-asaas" method="post">
+                      <button class="button small secondary" type="submit">Sincronizar Asaas</button>
+                    </form>
+                  <% } %>
                 <% } else { %>
                   Debitado automaticamente
                 <% } %>

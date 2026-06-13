@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const express = require("express");
 
 const { requireAuth, requireAdmin } = require("./middleware/auth");
-const { createPixDepositCharge, isAsaasEnabled } = require("./services/asaas");
+const { createPixDepositCharge, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
 const {
@@ -111,6 +111,55 @@ function requirePaidParticipation(data, userId, poolId) {
 
 function pixCodeForDeposit(data, amount, userId) {
   return `PIX|${data.settings.pixKey}|${Number(amount).toFixed(2)}|CARTEIRA-USER-${userId}-${Date.now()}`;
+}
+
+function applyAsaasPaymentStatus(data, payment, asaasPayment, event, req) {
+  const before = {
+    status: payment.status,
+    creditedAt: payment.creditedAt,
+    providerStatus: payment.providerStatus
+  };
+  payment.providerStatus = asaasPayment.status || payment.providerStatus;
+  payment.updatedAt = todayIso();
+
+  const paidEvents = ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED_IN_CASH"];
+  const paidStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+  const expiredStatuses = ["OVERDUE", "DELETED"];
+  const refundedStatuses = ["REFUNDED", "CHARGEBACK_REQUESTED", "CHARGEBACK_DISPUTE"];
+
+  if (paidEvents.includes(event) || paidStatuses.includes(asaasPayment.status)) {
+    payment.status = "paid";
+    payment.transactionId = asaasPayment.id;
+    payment.confirmedAt = payment.confirmedAt || todayIso();
+
+    if (payment.type === "deposit" && !payment.creditedAt) {
+      const user = data.users.find((item) => item.id === payment.userId);
+      if (user) {
+        const beforeBalance = Number(user.walletBalance || 0);
+        user.walletBalance = beforeBalance + Number(payment.amount || 0);
+        payment.creditedAt = todayIso();
+        audit(
+          data,
+          null,
+          "wallet.deposit_credited",
+          "users",
+          { id: user.id, walletBalance: beforeBalance },
+          { id: user.id, walletBalance: user.walletBalance, paymentId: payment.id, providerPaymentId: asaasPayment.id },
+          req
+        );
+      }
+    }
+  } else if (expiredStatuses.includes(asaasPayment.status)) {
+    payment.status = "expired";
+  } else if (refundedStatuses.includes(asaasPayment.status)) {
+    payment.status = "refunded";
+  }
+
+  if (before.status !== payment.status || before.providerStatus !== payment.providerStatus) {
+    audit(data, null, "payment.status_changed", "payments", before, payment, req);
+  }
+
+  return payment.status !== before.status || payment.providerStatus !== before.providerStatus || payment.creditedAt !== before.creditedAt;
 }
 
 function router(store) {
@@ -328,51 +377,7 @@ function router(store) {
     );
     if (!payment) return res.json({ ok: true });
 
-    const before = {
-      status: payment.status,
-      creditedAt: payment.creditedAt,
-      providerStatus: payment.providerStatus
-    };
-    payment.providerStatus = asaasPayment.status || payment.providerStatus;
-    payment.updatedAt = todayIso();
-
-    const paidEvents = ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED_IN_CASH"];
-    const paidStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
-    const expiredStatuses = ["OVERDUE", "DELETED"];
-    const refundedStatuses = ["REFUNDED", "CHARGEBACK_REQUESTED", "CHARGEBACK_DISPUTE"];
-
-    if (paidEvents.includes(event) || paidStatuses.includes(asaasPayment.status)) {
-      payment.status = "paid";
-      payment.transactionId = asaasPayment.id;
-      payment.confirmedAt = payment.confirmedAt || todayIso();
-
-      if (payment.type === "deposit" && !payment.creditedAt) {
-        const user = data.users.find((item) => item.id === payment.userId);
-        if (user) {
-          const beforeBalance = Number(user.walletBalance || 0);
-          user.walletBalance = beforeBalance + Number(payment.amount || 0);
-          payment.creditedAt = todayIso();
-          audit(
-            data,
-            null,
-            "wallet.deposit_credited",
-            "users",
-            { id: user.id, walletBalance: beforeBalance },
-            { id: user.id, walletBalance: user.walletBalance, paymentId: payment.id, providerPaymentId },
-            req
-          );
-        }
-      }
-    } else if (expiredStatuses.includes(asaasPayment.status)) {
-      payment.status = "expired";
-    } else if (refundedStatuses.includes(asaasPayment.status)) {
-      payment.status = "refunded";
-    }
-
-    if (before.status !== payment.status || before.providerStatus !== payment.providerStatus) {
-      audit(data, null, "payment.status_changed", "payments", before, payment, req);
-    }
-
+    applyAsaasPaymentStatus(data, payment, asaasPayment, event, req);
     store.write(data);
     return res.json({ ok: true });
   });
@@ -642,6 +647,28 @@ function router(store) {
     res.render("app/payment", { title: "Pagamento PIX", payment, pool });
   });
 
+  app.post("/app/pagamentos/:id/sincronizar", requireAuth, async (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const payment = data.payments.find((item) => item.id === Number(req.params.id) && item.userId === user.id);
+    if (!payment) return res.redirect("/app/conta");
+    if (payment.provider !== "asaas" || !payment.providerPaymentId) {
+      req.flash("error", "Este pagamento nao possui cobranca Asaas para sincronizar.");
+      return res.redirect(`/app/pagamentos/${payment.id}`);
+    }
+
+    try {
+      const asaasPayment = await getAsaasPayment(payment.providerPaymentId);
+      applyAsaasPaymentStatus(data, payment, asaasPayment, "MANUAL_SYNC", req);
+      store.write(data);
+      req.flash("success", payment.status === "paid" ? "Pagamento confirmado e carteira atualizada." : "Status consultado no Asaas. O pagamento ainda nao consta como recebido.");
+    } catch (error) {
+      req.flash("error", `Nao foi possivel consultar o Asaas: ${error.message}`);
+    }
+    return res.redirect(`/app/pagamentos/${payment.id}`);
+  });
+
   app.get("/app/boloes/:id/palpites", requireAuth, (req, res) => {
     const data = store.read();
     normalizeData(data);
@@ -886,6 +913,31 @@ function router(store) {
     store.write(data);
     req.flash("success", "Status atualizado.");
     res.redirect("/admin/pagamentos");
+  });
+
+  app.post("/admin/pagamentos/:id/sincronizar-asaas", requireAuth, requireAdmin, async (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const payment = data.payments.find((item) => item.id === Number(req.params.id));
+    if (!payment || payment.provider !== "asaas" || !payment.providerPaymentId) {
+      req.flash("error", "Pagamento Asaas invalido para sincronizacao.");
+      return res.redirect("/admin/pagamentos");
+    }
+
+    try {
+      const asaasPayment = await getAsaasPayment(payment.providerPaymentId);
+      applyAsaasPaymentStatus(data, payment, asaasPayment, "ADMIN_SYNC", req);
+      store.write(data);
+      req.flash(
+        "success",
+        payment.status === "paid"
+          ? "Pagamento confirmado no Asaas e carteira atualizada."
+          : "Status consultado no Asaas. O pagamento ainda nao consta como recebido."
+      );
+    } catch (error) {
+      req.flash("error", `Nao foi possivel consultar o Asaas: ${error.message}`);
+    }
+    return res.redirect("/admin/pagamentos");
   });
 
   app.get("/admin/resultados", requireAuth, requireAdmin, (req, res) => {

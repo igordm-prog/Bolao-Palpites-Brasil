@@ -22,6 +22,11 @@
     <% if (payment.invoiceUrl) { %>
       <a class="button" href="<%= payment.invoiceUrl %>" target="_blank" rel="noopener">Abrir cobranca no Asaas</a>
     <% } %>
+    <% if (payment.provider === "asaas" && payment.status !== "paid") { %>
+      <form action="/app/pagamentos/<%= payment.id %>/sincronizar" method="post">
+        <button class="button secondary" type="submit">Atualizar pagamento</button>
+      </form>
+    <% } %>
     <p class="muted">Quando o pagamento for confirmado pelo Asaas, o valor entra automaticamente na sua carteira. A entrada do bolao sera descontada quando voce escolher participar.</p>
   <% } else { %>
     <p class="muted">Esta entrada foi paga com saldo da carteira.</p>

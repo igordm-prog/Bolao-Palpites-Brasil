@@ -96,8 +96,13 @@ async function createPixDepositCharge(data, user, payment) {
   return { charge, qrCode };
 }
 
+async function getAsaasPayment(paymentId) {
+  return asaasRequest(`/payments/${paymentId}`);
+}
+
 module.exports = {
   isAsaasEnabled,
   asaasRequest,
-  createPixDepositCharge
+  createPixDepositCharge,
+  getAsaasPayment
 };
