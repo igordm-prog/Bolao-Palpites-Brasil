@@ -3,7 +3,7 @@ const bcrypt = require("bcryptjs");
 const express = require("express");
 
 const { requireAuth, requireAdmin } = require("./middleware/auth");
-const { createPixDepositCharge, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
+const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
 const {
@@ -163,6 +163,56 @@ function applyAsaasPaymentStatus(data, payment, asaasPayment, event, req) {
   }
 
   return payment.status !== before.status || payment.providerStatus !== before.providerStatus || payment.creditedAt !== before.creditedAt;
+}
+
+function applyAsaasTransferStatus(data, payment, asaasTransfer, event, req) {
+  const before = {
+    status: payment.status,
+    providerStatus: payment.providerStatus,
+    refundedAt: payment.refundedAt,
+    transactionId: payment.transactionId
+  };
+
+  payment.providerStatus = asaasTransfer.status || payment.providerStatus;
+  payment.transferReceiptUrl = asaasTransfer.transactionReceiptUrl || payment.transferReceiptUrl || null;
+  payment.endToEndIdentifier = asaasTransfer.endToEndIdentifier || payment.endToEndIdentifier || null;
+  payment.updatedAt = todayIso();
+
+  const doneEvents = ["TRANSFER_DONE"];
+  const failedEvents = ["TRANSFER_FAILED", "TRANSFER_CANCELLED"];
+  const doneStatuses = ["DONE"];
+  const failedStatuses = ["FAILED", "CANCELLED"];
+
+  if (doneEvents.includes(event) || doneStatuses.includes(asaasTransfer.status)) {
+    payment.status = "paid";
+    payment.transactionId = asaasTransfer.id || payment.transactionId;
+    payment.confirmedAt = payment.confirmedAt || todayIso();
+  } else if (failedEvents.includes(event) || failedStatuses.includes(asaasTransfer.status)) {
+    if (payment.status !== "canceled" && payment.status !== "refunded") {
+      const user = data.users.find((item) => item.id === payment.userId);
+      if (user && payment.type === "withdrawal" && !payment.refundedAt) {
+        const beforeBalance = Number(user.walletBalance || 0);
+        user.walletBalance = beforeBalance + Number(payment.amount || 0);
+        payment.refundedAt = todayIso();
+        audit(
+          data,
+          null,
+          "wallet.withdrawal_canceled",
+          "users",
+          { id: user.id, walletBalance: beforeBalance },
+          { id: user.id, walletBalance: user.walletBalance, paymentId: payment.id, providerTransferId: asaasTransfer.id },
+          req
+        );
+      }
+    }
+    payment.status = "canceled";
+  }
+
+  if (before.status !== payment.status || before.providerStatus !== payment.providerStatus) {
+    audit(data, null, "payment.status_changed", "payments", before, payment, req);
+  }
+
+  return payment.status !== before.status || payment.providerStatus !== before.providerStatus || payment.refundedAt !== before.refundedAt;
 }
 
 function router(store) {
@@ -370,7 +420,40 @@ function router(store) {
 
     const data = store.read();
     normalizeData(data);
+
+    if (req.body?.type === "TRANSFER" && req.body?.transfer) {
+      const transfer = req.body.transfer;
+      const payment = data.payments.find(
+        (item) =>
+          item.type === "withdrawal" &&
+          item.provider === "asaas" &&
+          (item.providerTransferId === transfer.id || item.externalReference === transfer.externalReference) &&
+          Number(item.amount || 0) === Number(transfer.value || 0)
+      );
+      if (!payment) {
+        return res.json({ status: "REFUSED", refuseReason: "Transferencia nao encontrada no sistema." });
+      }
+      applyAsaasTransferStatus(data, payment, transfer, "TRANSFER_VALIDATION", req);
+      store.write(data);
+      return res.json({ status: "APPROVED" });
+    }
+
     const event = req.body?.event;
+    const asaasTransfer = req.body?.transfer || {};
+    const providerTransferId = asaasTransfer.id;
+    if (providerTransferId) {
+      const payment = data.payments.find(
+        (item) =>
+          item.type === "withdrawal" &&
+          item.provider === "asaas" &&
+          (item.providerTransferId === providerTransferId || item.externalReference === asaasTransfer.externalReference)
+      );
+      if (!payment) return res.json({ ok: true });
+      applyAsaasTransferStatus(data, payment, asaasTransfer, event, req);
+      store.write(data);
+      return res.json({ ok: true });
+    }
+
     const asaasPayment = req.body?.payment || {};
     const providerPaymentId = asaasPayment.id;
     if (!providerPaymentId) return res.json({ ok: true });
@@ -538,12 +621,11 @@ function router(store) {
     return res.redirect(`/app/pagamentos/${payment.id}`);
   });
 
-  app.post("/app/carteira/saques", requireAuth, (req, res) => {
+  app.post("/app/carteira/saques", requireAuth, async (req, res) => {
     const data = store.read();
     normalizeData(data);
     const user = getCurrentUser(data, req);
     const amount = Number(req.body.amount);
-    const pixKey = String(req.body.pixKey || "").trim();
     const minimum = Number(data.settings.withdrawalMinimum || 20);
     if (!Number.isFinite(amount) || amount < minimum) {
       req.flash("error", `O saque minimo e ${res.locals.formatMoney(minimum)}.`);
@@ -553,8 +635,12 @@ function router(store) {
       req.flash("error", "Saldo insuficiente para solicitar este saque.");
       return res.redirect("/app/carteira");
     }
-    if (pixKey.length < 5) {
-      req.flash("error", "Informe a chave PIX para receber o saque.");
+    if (!isAsaasEnabled()) {
+      req.flash("error", "Saque automatico indisponivel: ASAAS_API_KEY nao configurada.");
+      return res.redirect("/app/carteira");
+    }
+    if (![11, 14].includes(String(user.billingCpfCnpj || "").length)) {
+      req.flash("error", "Para sacar automaticamente, primeiro gere um deposito com CPF ou CNPJ do titular cadastrado.");
       return res.redirect("/app/carteira");
     }
 
@@ -572,9 +658,11 @@ function router(store) {
       pixCode: null,
       pixEncodedImage: null,
       pixExpirationDate: null,
-      payoutPixKey: pixKey,
-      provider: "manual",
+      payoutPixKey: user.billingCpfCnpj,
+      payoutPixKeyType: String(user.billingCpfCnpj).length === 14 ? "CNPJ" : "CPF",
+      provider: "asaas",
       providerPaymentId: null,
+      providerTransferId: null,
       providerStatus: null,
       externalReference: null,
       invoiceUrl: null,
@@ -585,6 +673,7 @@ function router(store) {
       debitedAt: todayIso(),
       refundedAt: null
     };
+    payment.externalReference = `wallet-withdrawal-${payment.id}`;
     data.payments.push(payment);
     audit(
       data,
@@ -596,7 +685,47 @@ function router(store) {
       req
     );
     store.write(data);
-    req.flash("success", "Saque solicitado. O valor ficou reservado enquanto o administrador processa o PIX.");
+
+    let finalStatus = payment.status;
+    try {
+      const transfer = await createPixWithdrawalTransfer(data, user, payment);
+      const latest = store.read();
+      normalizeData(latest);
+      const latestPayment = latest.payments.find((item) => item.id === payment.id);
+      if (latestPayment) {
+        latestPayment.provider = "asaas";
+        latestPayment.providerTransferId = transfer.id;
+        latestPayment.providerStatus = transfer.status;
+        latestPayment.transactionId = transfer.id;
+        latestPayment.transferReceiptUrl = transfer.transactionReceiptUrl || latestPayment.transferReceiptUrl || null;
+        latestPayment.endToEndIdentifier = transfer.endToEndIdentifier || latestPayment.endToEndIdentifier || null;
+        latestPayment.updatedAt = todayIso();
+        if (["DONE"].includes(transfer.status)) {
+          latestPayment.status = "paid";
+          latestPayment.confirmedAt = todayIso();
+        }
+        finalStatus = latestPayment.status;
+        store.write(latest);
+      }
+    } catch (error) {
+      const latest = store.read();
+      normalizeData(latest);
+      const latestUser = latest.users.find((item) => item.id === user.id);
+      const latestPayment = latest.payments.find((item) => item.id === payment.id);
+      if (latestUser && latestPayment && !latestPayment.refundedAt) {
+        latestUser.walletBalance = Number(latestUser.walletBalance || 0) + Number(latestPayment.amount || 0);
+        latestPayment.status = "canceled";
+        latestPayment.providerStatus = "FAILED_TO_CREATE";
+        latestPayment.refundedAt = todayIso();
+        latestPayment.updatedAt = todayIso();
+        audit(latest, user.id, "wallet.withdrawal_canceled", "payments", { id: payment.id }, { id: payment.id, error: error.message }, req);
+        store.write(latest);
+      }
+      req.flash("error", `Nao foi possivel enviar o saque pelo Asaas: ${error.message}`);
+      return res.redirect("/app/carteira");
+    }
+
+    req.flash("success", finalStatus === "paid" ? "Saque enviado automaticamente para o CPF/CNPJ cadastrado." : "Saque enviado ao Asaas. O valor ficou reservado ate a conclusao da transferencia.");
     return res.redirect("/app/carteira");
   });
 

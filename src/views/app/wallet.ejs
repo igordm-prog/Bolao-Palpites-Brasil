@@ -37,16 +37,16 @@
 
       <form class="panel form" action="/app/carteira/saques" method="post">
         <h2>Solicitar saque</h2>
-        <p class="muted">Informe o valor e a chave PIX. O valor sai do saldo disponivel e fica reservado ate o administrador concluir o pagamento.</p>
+        <p class="muted">O saque e enviado automaticamente pelo Asaas para a chave PIX CPF/CNPJ do titular cadastrado.</p>
         <label>Valor do saque
           <input type="number" name="amount" min="<%= settings.withdrawalMinimum %>" max="<%= user.walletBalance %>" step="0.01" value="<%= settings.withdrawalMinimum %>" required>
         </label>
-        <label>Chave PIX
-          <input name="pixKey" autocomplete="off" placeholder="CPF, e-mail, telefone ou chave aleatoria" required>
-        </label>
-        <button class="button secondary" type="submit" <%= Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20) ? "disabled" : "" %>>Solicitar saque</button>
+        <p class="muted">Destino: <strong><%= user.cpfMasked || "CPF/CNPJ cadastrado" %></strong></p>
+        <button class="button secondary" type="submit" <%= Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20) || !user.billingCpfCnpj ? "disabled" : "" %>>Solicitar saque</button>
         <% if (Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20)) { %>
           <p class="muted">Voce precisa ter pelo menos <%= formatMoney(settings.withdrawalMinimum) %> disponivel para sacar.</p>
+        <% } else if (!user.billingCpfCnpj) { %>
+          <p class="muted">Para liberar o saque automatico, o CPF/CNPJ do titular precisa estar cadastrado na carteira.</p>
         <% } %>
       </form>
     </div>
@@ -64,9 +64,9 @@
       <article class="panel">
         <h2>Como o saque funciona</h2>
         <dl class="details">
-          <div><dt>1. Solicitacao</dt><dd>Voce informa valor e chave PIX.</dd></div>
+          <div><dt>1. Solicitacao</dt><dd>Voce informa o valor do saque.</dd></div>
           <div><dt>2. Reserva</dt><dd>O valor sai do saldo para evitar uso duplicado.</dd></div>
-          <div><dt>3. Pagamento</dt><dd>O administrador envia o PIX e marca o saque como pago.</dd></div>
+          <div><dt>3. Pagamento</dt><dd>O Asaas envia o PIX para o CPF/CNPJ cadastrado.</dd></div>
         </dl>
       </article>
     </div>

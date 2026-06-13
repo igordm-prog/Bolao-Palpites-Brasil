@@ -100,9 +100,46 @@ async function getAsaasPayment(paymentId) {
   return asaasRequest(`/payments/${paymentId}`);
 }
 
+function pixKeyTypeForCpfCnpj(cpfCnpj) {
+  return String(cpfCnpj || "").length === 14 ? "CNPJ" : "CPF";
+}
+
+async function createPixWithdrawalTransfer(data, user, payment) {
+  if (!user.billingCpfCnpj) {
+    throw new Error("Para sacar automaticamente e necessario ter CPF ou CNPJ cadastrado.");
+  }
+
+  const externalReference = payment.externalReference || `wallet-withdrawal-${payment.id}`;
+  const transfer = await asaasRequest("/transfers", {
+    method: "POST",
+    body: {
+      value: Number(payment.amount || 0),
+      operationType: "PIX",
+      pixAddressKey: user.billingCpfCnpj,
+      pixAddressKeyType: pixKeyTypeForCpfCnpj(user.billingCpfCnpj),
+      description: `Saque da carteira - ${data.settings.appName}`,
+      externalReference
+    }
+  });
+
+  payment.provider = "asaas";
+  payment.providerTransferId = transfer.id;
+  payment.providerStatus = transfer.status;
+  payment.externalReference = externalReference;
+  payment.transactionId = transfer.id;
+  payment.transferReceiptUrl = transfer.transactionReceiptUrl || null;
+  payment.endToEndIdentifier = transfer.endToEndIdentifier || null;
+  payment.payoutPixKey = user.billingCpfCnpj;
+  payment.payoutPixKeyType = pixKeyTypeForCpfCnpj(user.billingCpfCnpj);
+  payment.updatedAt = todayIso();
+
+  return transfer;
+}
+
 module.exports = {
   isAsaasEnabled,
   asaasRequest,
   createPixDepositCharge,
-  getAsaasPayment
+  getAsaasPayment,
+  createPixWithdrawalTransfer
 };

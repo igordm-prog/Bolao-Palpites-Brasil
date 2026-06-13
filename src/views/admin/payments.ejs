@@ -24,7 +24,7 @@
               <td><%= formatMoney(payment.amount) %></td>
               <td><span class="badge <%= payment.status %>"><%= labelForStatus(payment.status) %></span></td>
               <td>
-                <%= payment.transactionId || payment.providerPaymentId || "-" %>
+                <%= payment.transactionId || payment.providerPaymentId || payment.providerTransferId || "-" %>
                 <% if (payment.providerStatus) { %>
                   <small>Asaas: <%= payment.providerStatus %></small>
                 <% } %>
@@ -44,7 +44,9 @@
                     </form>
                   <% } %>
                 <% } else if (payment.type === "withdrawal") { %>
-                  <% if (payment.status === "awaiting") { %>
+                  <% if (payment.provider === "asaas") { %>
+                    Saque automatico pelo Asaas
+                  <% } else if (payment.status === "awaiting") { %>
                     <form class="inline-form" action="/admin/pagamentos/<%= payment.id %>/saque" method="post">
                       <input name="transactionId" placeholder="ID do PIX pago">
                       <button class="button small" name="action" value="paid" type="submit">Marcar pago</button>
