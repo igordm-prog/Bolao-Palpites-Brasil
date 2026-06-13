@@ -31,6 +31,24 @@ cp data/db.json /root/db-backup-$(date +%F-%H%M).json
 
 Arquivos `.sqlite`, `.db`, logs e `.env` nao devem ser enviados ao GitHub.
 
+## PIX automatico com Asaas
+
+Configure no `.env`:
+
+```env
+ASAAS_ENV=production
+ASAAS_API_KEY=sua-chave-do-asaas
+ASAAS_WEBHOOK_TOKEN=um-token-secreto-grande
+```
+
+No painel do Asaas, cadastre o webhook de cobrancas apontando para:
+
+```text
+https://bolaopalpitesbrasil.com.br/webhooks/asaas
+```
+
+Use o mesmo valor de `ASAAS_WEBHOOK_TOKEN` como token de autenticacao do webhook. Quando o Asaas enviar `PAYMENT_RECEIVED` ou `PAYMENT_CONFIRMED`, o sistema marca o deposito como pago e credita a carteira automaticamente.
+
 Acesse `http://localhost:3000`.
 
 Administrador inicial:

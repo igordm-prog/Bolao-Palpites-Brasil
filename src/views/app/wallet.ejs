@@ -22,7 +22,7 @@
     <div class="grid wallet-grid">
       <form class="panel form" action="/app/carteira/depositos" method="post">
         <h2>Depositar saldo</h2>
-        <p class="muted">Informe o valor, gere o PIX e aguarde a confirmacao do administrador. Depois disso o saldo aparece na carteira.</p>
+        <p class="muted">Informe o valor e gere o PIX. Quando o Asaas confirmar o pagamento, o saldo entra automaticamente na carteira.</p>
         <label>Valor do deposito
           <input type="number" name="amount" min="<%= settings.depositMinimum %>" step="0.01" value="<%= settings.depositMinimum %>" required>
         </label>
@@ -33,7 +33,7 @@
         <h2>Como a entrada funciona</h2>
         <dl class="details">
           <div><dt>1. Deposito</dt><dd>Voce adiciona saldo por PIX.</dd></div>
-          <div><dt>2. Confirmacao</dt><dd>O admin confirma e o valor entra na carteira.</dd></div>
+          <div><dt>2. Confirmacao</dt><dd>O Asaas confirma e o valor entra na carteira.</dd></div>
           <div><dt>3. Participacao</dt><dd>Ao clicar em participar, a entrada e descontada automaticamente.</dd></div>
         </dl>
       </article>

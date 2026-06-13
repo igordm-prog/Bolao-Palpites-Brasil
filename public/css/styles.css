@@ -983,6 +983,13 @@ select {
   border-radius: 8px;
 }
 
+.pix-qr {
+  width: min(260px, 100%);
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+}
+
 .table-panel {
   overflow-x: auto;
   padding: 0;

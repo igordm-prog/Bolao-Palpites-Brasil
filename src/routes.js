@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const express = require("express");
 
 const { requireAuth, requireAdmin } = require("./middleware/auth");
+const { createPixDepositCharge, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
 const {
@@ -308,6 +309,73 @@ function router(store) {
     return res.redirect("/recuperar");
   });
 
+  app.post("/webhooks/asaas", (req, res) => {
+    const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN;
+    if (expectedToken && req.get("asaas-access-token") !== expectedToken) {
+      return res.status(401).json({ ok: false });
+    }
+
+    const data = store.read();
+    normalizeData(data);
+    const event = req.body?.event;
+    const asaasPayment = req.body?.payment || {};
+    const providerPaymentId = asaasPayment.id;
+    if (!providerPaymentId) return res.json({ ok: true });
+
+    const payment = data.payments.find(
+      (item) => item.provider === "asaas" && item.providerPaymentId === providerPaymentId
+    );
+    if (!payment) return res.json({ ok: true });
+
+    const before = {
+      status: payment.status,
+      creditedAt: payment.creditedAt,
+      providerStatus: payment.providerStatus
+    };
+    payment.providerStatus = asaasPayment.status || payment.providerStatus;
+    payment.updatedAt = todayIso();
+
+    const paidEvents = ["PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_RECEIVED_IN_CASH"];
+    const paidStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+    const expiredStatuses = ["OVERDUE", "DELETED"];
+    const refundedStatuses = ["REFUNDED", "CHARGEBACK_REQUESTED", "CHARGEBACK_DISPUTE"];
+
+    if (paidEvents.includes(event) || paidStatuses.includes(asaasPayment.status)) {
+      payment.status = "paid";
+      payment.transactionId = asaasPayment.id;
+      payment.confirmedAt = payment.confirmedAt || todayIso();
+
+      if (payment.type === "deposit" && !payment.creditedAt) {
+        const user = data.users.find((item) => item.id === payment.userId);
+        if (user) {
+          const beforeBalance = Number(user.walletBalance || 0);
+          user.walletBalance = beforeBalance + Number(payment.amount || 0);
+          payment.creditedAt = todayIso();
+          audit(
+            data,
+            null,
+            "wallet.deposit_credited",
+            "users",
+            { id: user.id, walletBalance: beforeBalance },
+            { id: user.id, walletBalance: user.walletBalance, paymentId: payment.id, providerPaymentId },
+            req
+          );
+        }
+      }
+    } else if (expiredStatuses.includes(asaasPayment.status)) {
+      payment.status = "expired";
+    } else if (refundedStatuses.includes(asaasPayment.status)) {
+      payment.status = "refunded";
+    }
+
+    if (before.status !== payment.status || before.providerStatus !== payment.providerStatus) {
+      audit(data, null, "payment.status_changed", "payments", before, payment, req);
+    }
+
+    store.write(data);
+    return res.json({ ok: true });
+  });
+
   app.get("/redefinir/:token", (req, res) => {
     const data = store.read();
     normalizeData(data);
@@ -406,7 +474,7 @@ function router(store) {
     res.render("app/history", { title: "Histórico", user, participations, payments, totals });
   });
 
-  app.post("/app/carteira/depositos", requireAuth, (req, res) => {
+  app.post("/app/carteira/depositos", requireAuth, async (req, res) => {
     const data = store.read();
     normalizeData(data);
     const user = getCurrentUser(data, req);
@@ -425,11 +493,29 @@ function router(store) {
       status: "awaiting",
       method: "PIX",
       pixCode: pixCodeForDeposit(data, amount, user.id),
+      pixEncodedImage: null,
+      pixExpirationDate: null,
+      provider: isAsaasEnabled() ? "asaas" : "manual",
+      providerPaymentId: null,
+      providerStatus: null,
+      externalReference: null,
+      invoiceUrl: null,
       transactionId: null,
       createdAt: todayIso(),
+      updatedAt: todayIso(),
       confirmedAt: null,
       creditedAt: null
     };
+
+    if (isAsaasEnabled()) {
+      try {
+        await createPixDepositCharge(data, user, payment);
+      } catch (error) {
+        req.flash("error", `Nao foi possivel gerar o PIX automatico: ${error.message}`);
+        return res.redirect("/app/carteira");
+      }
+    }
+
     data.payments.push(payment);
     audit(data, user.id, "wallet.deposit_created", "payments", null, { id: payment.id, amount }, req);
     store.write(data);

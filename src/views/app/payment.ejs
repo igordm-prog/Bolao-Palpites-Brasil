@@ -9,10 +9,20 @@
   </dl>
   <% if (payment.type === "deposit") { %>
     <div class="pix-box">
+      <% if (payment.pixEncodedImage) { %>
+        <span>QR Code PIX</span>
+        <img class="pix-qr" src="data:image/png;base64,<%= payment.pixEncodedImage %>" alt="QR Code PIX">
+      <% } %>
       <span>PIX copia e cola</span>
       <code><%= payment.pixCode %></code>
+      <% if (payment.pixExpirationDate) { %>
+        <small>Valido ate <%= formatDateTime(payment.pixExpirationDate) %></small>
+      <% } %>
     </div>
-    <p class="muted">Quando o administrador confirmar este PIX, o valor entra na sua carteira. A entrada do bolao sera descontada automaticamente quando voce escolher participar.</p>
+    <% if (payment.invoiceUrl) { %>
+      <a class="button" href="<%= payment.invoiceUrl %>" target="_blank" rel="noopener">Abrir cobranca no Asaas</a>
+    <% } %>
+    <p class="muted">Quando o pagamento for confirmado pelo Asaas, o valor entra automaticamente na sua carteira. A entrada do bolao sera descontada quando voce escolher participar.</p>
   <% } else { %>
     <p class="muted">Esta entrada foi paga com saldo da carteira.</p>
   <% } %>
