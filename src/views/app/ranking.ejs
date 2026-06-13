@@ -1,0 +1,100 @@
+<%- include("../partials/head", { title }) %>
+<%
+  const currentRank = currentUser ? rows.find((row) => row.userId === currentUser.id) : null;
+  const podium = rows.slice(0, 3);
+%>
+<section class="workspace ranking-workspace">
+  <aside class="sidebar">
+    <h2>Ranking</h2>
+    <a href="/app/boloes/<%= pool.id %>/palpites">Jogos</a>
+    <a class="active" href="/app/boloes/<%= pool.id %>/ranking">Classificação</a>
+    <a href="/premiacoes">Premiações</a>
+    <a href="/regras">Regulamento</a>
+    <% if (isAdmin) { %><a href="/admin">Painel</a><% } %>
+  </aside>
+  <div class="content ranking-content">
+    <header class="ranking-hero">
+      <div>
+        <p class="eyebrow">Classificação ao vivo</p>
+        <h1><%= pool.name %></h1>
+        <p>O ranking combina pontuação total, placares exatos e critérios de desempate.</p>
+      </div>
+      <dl class="ranking-summary">
+        <div><dt>Arrecadado</dt><dd><%= formatMoney(financials.gross) %></dd></div>
+        <div><dt>Prêmio</dt><dd><%= formatMoney(financials.netPrize) %></dd></div>
+        <div><dt>Participantes</dt><dd><%= financials.paidCount %></dd></div>
+      </dl>
+    </header>
+
+    <div class="ranking-grid">
+      <section class="podium-panel">
+        <div class="account-section-head">
+          <div>
+            <p class="eyebrow">Pódio</p>
+            <h2>Primeiros colocados</h2>
+          </div>
+        </div>
+        <div class="podium-list">
+          <% if (!podium.length) { %>
+            <p class="muted">Nenhum participante confirmado ainda.</p>
+          <% } %>
+          <% podium.forEach((row) => { %>
+            <article class="podium-item <%= row.userId === currentUser?.id ? 'me' : '' %>">
+              <span class="rank-badge"><%= row.position %></span>
+              <div>
+                <strong><%= row.name %></strong>
+                <small><%= row.exact %> exatos · <%= row.result %> resultados · <%= row.side %> lados</small>
+              </div>
+              <b><%= row.total %> pts</b>
+            </article>
+          <% }) %>
+        </div>
+      </section>
+
+      <aside class="ranking-user-panel">
+        <p class="eyebrow">Meu desempenho</p>
+        <% if (currentRank) { %>
+          <strong><%= currentRank.position %>º lugar</strong>
+          <span><%= currentRank.total %> ponto(s)</span>
+          <small>Exatos: <%= currentRank.exact %> · Resultados: <%= currentRank.result %> · Lados: <%= currentRank.side %></small>
+        <% } else { %>
+          <strong>Fora do ranking</strong>
+          <span>Participe do bolão para aparecer aqui.</span>
+          <a class="button small" href="/app/conta">Ver bolões</a>
+        <% } %>
+      </aside>
+    </div>
+
+    <section class="table-panel ranking-table-panel">
+      <h2>Tabela completa</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Pos.</th>
+            <th>Participante</th>
+            <th>Pontos</th>
+            <th>Exatos</th>
+            <th>Resultados</th>
+            <th>Lados</th>
+            <th>Primeiro envio</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!rows.length) { %><tr><td colspan="7">Nenhum participante confirmado.</td></tr><% } %>
+          <% rows.forEach((row) => { %>
+            <tr class="<%= row.userId === currentUser?.id ? 'me-row' : '' %>">
+              <td><span class="rank-badge"><%= row.position %></span></td>
+              <td><strong><%= row.name %></strong><% if (row.userId === currentUser?.id) { %><small>Você</small><% } %></td>
+              <td><strong><%= row.total %></strong></td>
+              <td><%= row.exact %></td>
+              <td><%= row.result %></td>
+              <td><%= row.side %></td>
+              <td><%= row.firstGuessAt ? formatDateTime(row.firstGuessAt) : "-" %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

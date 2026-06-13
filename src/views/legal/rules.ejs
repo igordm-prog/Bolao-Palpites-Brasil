@@ -1,0 +1,62 @@
+<%- include("../partials/head", { title }) %>
+<section class="info-page">
+  <header class="info-hero">
+    <div>
+      <p class="eyebrow">Regulamento</p>
+      <h1>Regras do Bolão</h1>
+      <p>As regras abaixo definem pontuação, desempate, participação e funcionamento da carteira.</p>
+    </div>
+    <div class="info-total-card">
+      <span>Entrada mínima</span>
+      <strong><%= formatMoney(settings.depositMinimum) %></strong>
+      <small>debitada automaticamente da carteira</small>
+    </div>
+  </header>
+
+  <div class="rules-grid">
+    <article class="rule-card featured">
+      <span class="rule-score">5</span>
+      <div>
+        <h2>Placar exato</h2>
+        <p>Acertou o resultado completo, com gols dos dois times iguais ao placar oficial.</p>
+      </div>
+    </article>
+    <article class="rule-card">
+      <span class="rule-score">2</span>
+      <div>
+        <h2>Vencedor ou empate</h2>
+        <p>Acertou quem venceu ou acertou que o jogo terminou empatado.</p>
+      </div>
+    </article>
+    <article class="rule-card">
+      <span class="rule-score">1</span>
+      <div>
+        <h2>Gols de um lado</h2>
+        <p>Acertou a quantidade de gols de um dos times, mesmo errando o placar final.</p>
+      </div>
+    </article>
+    <article class="rule-card">
+      <span class="rule-score">0</span>
+      <div>
+        <h2>Sem acerto</h2>
+        <p>Palpite sem placar exato, sem vencedor correto e sem gols corretos.</p>
+      </div>
+    </article>
+  </div>
+
+  <div class="info-grid">
+    <article class="info-card">
+      <h2>Critério de desempate</h2>
+      <p>Maior número de placares exatos, depois resultados acertados, depois gols de um lado do placar e, por fim, envio mais antigo.</p>
+    </article>
+    <article class="info-card">
+      <h2>Jogos válidos</h2>
+      <p>O bolão trabalha com jogos das Séries A, B, C e D cadastrados para sábado ou domingo.</p>
+    </article>
+    <article class="info-card">
+      <h2>Participação</h2>
+      <p>O usuário deposita saldo na carteira e escolhe em qual bolão quer entrar. Ao participar, a entrada é descontada automaticamente.</p>
+    </article>
+  </div>
+</section>
+<%- include("../partials/footer") %>

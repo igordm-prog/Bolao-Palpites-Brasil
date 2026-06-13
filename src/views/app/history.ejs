@@ -1,0 +1,105 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace account-workspace">
+  <aside class="sidebar account-sidebar">
+    <h2>Histórico</h2>
+    <a href="/app/conta">Conta</a>
+    <a href="/app/carteira">Carteira</a>
+    <a class="active" href="/app/historico">Histórico</a>
+    <a href="/app/perfil">Perfil</a>
+  </aside>
+  <div class="content account-content">
+    <header class="account-hero">
+      <div>
+        <p class="eyebrow">Olá, <%= user.name.split(" ")[0] %></p>
+        <h1>Seu histórico</h1>
+        <p>Acompanhe entradas pagas, depósitos, palpites enviados e desempenho em cada bolão.</p>
+      </div>
+      <div class="account-wallet">
+        <span>Saldo atual</span>
+        <strong><%= formatMoney(user.walletBalance) %></strong>
+        <small>Movimentações registradas: <%= payments.length %></small>
+      </div>
+    </header>
+
+    <div class="account-stats">
+      <article>
+        <span>Bolões pagos</span>
+        <strong><%= totals.paidEntries %></strong>
+        <small>com entrada debitada</small>
+      </article>
+      <article>
+        <span>Depositado</span>
+        <strong><%= formatMoney(totals.deposits) %></strong>
+        <small>confirmado na carteira</small>
+      </article>
+      <article>
+        <span>Palpites</span>
+        <strong><%= totals.guesses %></strong>
+        <small>enviados no sistema</small>
+      </article>
+    </div>
+
+    <section class="account-section">
+      <div class="account-section-head">
+        <div>
+          <p class="eyebrow">Participações</p>
+          <h2>Bolões jogados</h2>
+        </div>
+      </div>
+      <div class="pool-list">
+        <% if (!participations.length) { %>
+          <article class="pool-item single">
+            <div>
+              <h3>Nenhuma participação ainda</h3>
+              <p class="muted">Deposite saldo e participe de um bolão para começar seu histórico.</p>
+            </div>
+            <a class="button full" href="/app/conta">Ver bolões</a>
+          </article>
+        <% } %>
+        <% participations.forEach((item) => { %>
+          <article class="pool-item">
+            <div class="pool-main">
+              <div class="pool-title">
+                <h3><%= item.pool?.name || "Bolão removido" %></h3>
+                <span class="badge <%= item.status %>"><%= labelForStatus(item.status) %></span>
+              </div>
+              <dl class="pool-metrics">
+                <div><dt>Posição</dt><dd><%= item.rankingPosition ? `${item.rankingPosition}º` : "-" %></dd></div>
+                <div><dt>Pontos</dt><dd><%= item.totalPoints %></dd></div>
+                <div><dt>Palpites</dt><dd><%= item.guesses.length %></dd></div>
+              </dl>
+              <p class="muted">Exatos: <%= item.exact %> · Resultados: <%= item.result %> · Lados: <%= item.side %></p>
+            </div>
+            <div class="pool-actions">
+              <% if (item.pool) { %>
+                <a class="button full" href="/app/boloes/<%= item.pool.id %>/palpites">Abrir jogos</a>
+                <a class="button secondary full" href="/app/boloes/<%= item.pool.id %>/ranking">Ranking</a>
+              <% } %>
+            </div>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+
+    <section class="table-panel">
+      <h2>Movimentações</h2>
+      <table>
+        <thead><tr><th>Data</th><th>Tipo</th><th>Referência</th><th>Valor</th><th>Status</th><th>Método</th></tr></thead>
+        <tbody>
+          <% if (!payments.length) { %><tr><td colspan="6">Nenhuma movimentação registrada.</td></tr><% } %>
+          <% payments.forEach((payment) => { %>
+            <tr>
+              <td><%= formatDateTime(payment.createdAt) %></td>
+              <td><%= labelForPaymentType(payment.type) %></td>
+              <td><%= payment.pool?.name || "Carteira" %></td>
+              <td><%= formatMoney(payment.amount) %></td>
+              <td><span class="badge <%= payment.status %>"><%= labelForStatus(payment.status) %></span></td>
+              <td><%= labelForPaymentMethod(payment.method) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

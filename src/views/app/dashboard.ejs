@@ -1,0 +1,133 @@
+<%- include("../partials/head", { title }) %>
+<%
+  const paidParticipations = participations.filter((item) => item.status === "paid");
+  const pendingDeposits = payments.filter((item) => item.type === "deposit" && item.status === "awaiting");
+  const walletEntries = payments.filter((item) => item.type === "pool_entry" && item.status === "paid");
+  const recentPayments = payments.slice().reverse().slice(0, 5);
+%>
+<section class="workspace account-workspace">
+  <aside class="sidebar account-sidebar">
+    <h2>Conta</h2>
+    <a class="active" href="/app/conta">Resumo</a>
+    <a href="/app/carteira">Carteira</a>
+    <a href="/app/perfil">Perfil</a>
+    <% if (isAdmin) { %><a href="/admin">Painel</a><% } %>
+  </aside>
+  <div class="content account-content">
+    <header class="account-hero">
+      <div>
+        <p class="eyebrow">Ola, <%= user.name.split(" ")[0] %></p>
+        <h1>Minha conta</h1>
+        <p>Gerencie saldo, participações e acesso aos bolões em um só lugar.</p>
+      </div>
+      <div class="account-wallet">
+        <span>Saldo disponível</span>
+        <strong><%= formatMoney(user.walletBalance) %></strong>
+        <small>Entradas são debitadas automaticamente da carteira.</small>
+        <div class="account-actions">
+          <a class="button small" href="/app/carteira">Depositar</a>
+          <a class="button secondary small" href="/app/perfil">Perfil</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="account-stats">
+      <article>
+        <span>Bolões ativos</span>
+        <strong><%= paidParticipations.length %></strong>
+        <small>com entrada paga</small>
+      </article>
+      <article>
+        <span>Depósitos pendentes</span>
+        <strong><%= pendingDeposits.length %></strong>
+        <small>aguardando confirmação</small>
+      </article>
+      <article>
+        <span>Entradas debitadas</span>
+        <strong><%= walletEntries.length %></strong>
+        <small>pagas com carteira</small>
+      </article>
+    </div>
+
+    <section class="account-section">
+      <div class="account-section-head">
+        <div>
+          <p class="eyebrow">Bolões</p>
+          <h2>Disponíveis para participar</h2>
+        </div>
+        <a href="/app/carteira">Adicionar saldo</a>
+      </div>
+      <div class="pool-list">
+      <% pools.forEach((pool) => {
+        const participation = participations.find((item) => item.poolId === pool.id);
+      %>
+        <article class="pool-item">
+          <div class="pool-main">
+            <div class="pool-title">
+              <h3><%= pool.name %></h3>
+              <span class="badge <%= pool.status %>"><%= labelForStatus(pool.status) %></span>
+            </div>
+            <dl class="pool-metrics">
+              <div><dt>Entrada</dt><dd><%= formatMoney(pool.entryValue) %></dd></div>
+              <div><dt>Prêmio</dt><dd><%= formatMoney(pool.financials.netPrize) %></dd></div>
+              <div><dt>Prazo</dt><dd><%= formatDateTime(pool.deadlineAt) %></dd></div>
+            </dl>
+            <% if (!isAdmin && !participation) { %>
+              <p class="muted">Ao participar, <%= formatMoney(pool.entryValue) %> sai da sua carteira e os palpites ficam liberados na hora.</p>
+            <% } %>
+          </div>
+          <div class="pool-actions">
+          <% if (isAdmin) { %>
+            <a class="button full" href="/app/boloes/<%= pool.id %>/palpites">Abrir jogos</a>
+            <a class="button secondary full" href="/app/boloes/<%= pool.id %>/ranking">Ranking</a>
+          <% } else if (!participation) { %>
+            <% if (Number(user.walletBalance || 0) >= Number(pool.entryValue || 0)) { %>
+              <form action="/app/boloes/<%= pool.id %>/participar" method="post">
+                <button class="button full" type="submit">Participar com saldo</button>
+              </form>
+            <% } else { %>
+              <a class="button full" href="/app/carteira">Depositar para participar</a>
+            <% } %>
+          <% } else if (participation.status === "paid") { %>
+            <a class="button full" href="/app/boloes/<%= pool.id %>/palpites">Abrir jogos</a>
+            <a class="button secondary full" href="/app/boloes/<%= pool.id %>/ranking">Ranking</a>
+          <% } else { %>
+            <% if (Number(user.walletBalance || 0) >= Number(pool.entryValue || 0)) { %>
+              <form action="/app/boloes/<%= pool.id %>/participar" method="post">
+                <button class="button full" type="submit">Participar com saldo</button>
+              </form>
+            <% } else { %>
+              <a class="button full" href="/app/carteira">Depositar para participar</a>
+            <% } %>
+          <% } %>
+          </div>
+        </article>
+      <% }) %>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <div class="account-section-head">
+        <div>
+          <p class="eyebrow">Carteira</p>
+          <h2>Movimentações recentes</h2>
+        </div>
+        <a href="/app/carteira">Ver carteira completa</a>
+      </div>
+      <div class="movement-list">
+        <% if (!recentPayments.length) { %>
+          <p class="muted">Nenhuma movimentação registrada ainda.</p>
+        <% } %>
+        <% recentPayments.forEach((payment) => { %>
+          <div class="movement-item">
+            <span class="movement-type"><%= labelForPaymentType(payment.type) %></span>
+            <strong><%= formatMoney(payment.amount) %></strong>
+            <span class="badge <%= payment.status %>"><%= labelForStatus(payment.status) %></span>
+            <small><%= formatDateTime(payment.createdAt) %></small>
+          </div>
+        <% }) %>
+      </div>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

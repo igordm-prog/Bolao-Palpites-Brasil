@@ -1,0 +1,56 @@
+<%- include("../partials/head", { title }) %>
+<section class="info-page">
+  <header class="info-hero">
+    <div>
+      <p class="eyebrow">Premiações</p>
+      <h1>Como o prêmio é calculado</h1>
+      <p>O valor do bolão vem das entradas confirmadas. A taxa administrativa é descontada e o restante forma a premiação líquida.</p>
+    </div>
+    <div class="info-total-card">
+      <span>Prêmio líquido atual</span>
+      <strong><%= formatMoney(totals.netPrize) %></strong>
+      <small><%= totals.paidCount %> entrada(s) confirmada(s)</small>
+    </div>
+  </header>
+
+  <div class="info-grid">
+    <article class="info-card">
+      <span class="info-icon trophy-icon"></span>
+      <h2>Modelo padrão</h2>
+      <p>O primeiro colocado recebe 100% do prêmio líquido, salvo quando o bolão for configurado com divisão diferente.</p>
+    </article>
+    <article class="info-card">
+      <span class="info-icon coins-icon"></span>
+      <h2>Taxa administrativa</h2>
+      <p>A taxa padrão é de <strong><%= settings.entryAdminFeePercent %>%</strong> sobre o valor arrecadado confirmado.</p>
+    </article>
+    <article class="info-card">
+      <span class="info-icon people-icon"></span>
+      <h2>Confirmação</h2>
+      <p>Somente participantes com entrada paga entram no ranking e contam para o valor acumulado.</p>
+    </article>
+  </div>
+
+  <section class="table-panel info-table">
+    <h2>Bolões e valores</h2>
+    <table>
+      <thead>
+        <tr><th>Bolão</th><th>Status</th><th>Participantes</th><th>Arrecadado</th><th>Taxa</th><th>Prêmio</th></tr>
+      </thead>
+      <tbody>
+        <% if (!pools.length) { %><tr><td colspan="6">Nenhum bolão cadastrado.</td></tr><% } %>
+        <% pools.forEach((pool) => { %>
+          <tr>
+            <td><strong><%= pool.name %></strong><small>Entrada: <%= formatMoney(pool.entryValue) %></small></td>
+            <td><span class="badge <%= pool.status %>"><%= labelForStatus(pool.status) %></span></td>
+            <td><%= pool.financials.paidCount %></td>
+            <td><%= formatMoney(pool.financials.gross) %></td>
+            <td><%= formatMoney(pool.financials.adminFee) %></td>
+            <td><strong><%= formatMoney(pool.financials.netPrize) %></strong></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </section>
+</section>
+<%- include("../partials/footer") %>

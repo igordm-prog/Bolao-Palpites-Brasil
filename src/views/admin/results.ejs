@@ -1,0 +1,36 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/jogos">Jogos</a>
+    <a href="/admin/resultados">Resultados</a>
+  </aside>
+  <div class="content">
+    <h1>Resultados</h1>
+    <div class="table-panel">
+      <table>
+        <thead><tr><th>Bolao</th><th>Jogo</th><th>Placar oficial</th><th>Status</th><th>Acao</th></tr></thead>
+        <tbody>
+          <% matches.forEach((match) => { %>
+            <tr>
+              <td><%= match.poolName %></td>
+              <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><small><%= match.matchDate %> <%= match.matchTime %></small></td>
+              <td><%= match.homeScore ?? "-" %> x <%= match.awayScore ?? "-" %></td>
+              <td><span class="badge"><%= labelForStatus(match.status) %></span></td>
+              <td>
+                <form class="inline-form" action="/admin/jogos/<%= match.id %>/resultado" method="post">
+                  <input type="number" min="0" name="homeScore" value="<%= match.homeScore ?? "" %>" required>
+                  <span>x</span>
+                  <input type="number" min="0" name="awayScore" value="<%= match.awayScore ?? "" %>" required>
+                  <button class="button small" type="submit">Salvar</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<%- include("../partials/footer") %>

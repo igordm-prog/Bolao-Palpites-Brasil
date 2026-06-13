@@ -1,0 +1,28 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/logs">Auditoria</a>
+  </aside>
+  <div class="content">
+    <h1>Auditoria</h1>
+    <div class="table-panel">
+      <table>
+        <thead><tr><th>Data</th><th>Usuario</th><th>Acao</th><th>Tabela</th><th>IP</th></tr></thead>
+        <tbody>
+          <% logs.forEach((log) => { %>
+            <tr>
+              <td><%= formatDateTime(log.createdAt) %></td>
+              <td><%= log.actor?.name || "-" %></td>
+              <td><%= labelForAuditAction(log.action) %></td>
+              <td><%= labelForTableName(log.tableName) %></td>
+              <td><%= log.ip || "-" %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<%- include("../partials/footer") %>

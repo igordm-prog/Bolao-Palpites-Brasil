@@ -1,0 +1,71 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Carteira</h2>
+    <a href="/app/conta">Resumo</a>
+    <a class="active" href="/app/carteira">Carteira</a>
+    <a href="/app/perfil">Perfil</a>
+  </aside>
+  <div class="content">
+    <div class="section-header">
+      <div>
+        <p class="eyebrow">Saldo do usuario</p>
+        <h1>Minha carteira</h1>
+      </div>
+      <div class="wallet">
+        <span>Disponivel</span>
+        <strong><%= formatMoney(user.walletBalance) %></strong>
+        <small>Saque minimo: <%= formatMoney(settings.withdrawalMinimum) %></small>
+      </div>
+    </div>
+
+    <div class="grid wallet-grid">
+      <form class="panel form" action="/app/carteira/depositos" method="post">
+        <h2>Depositar saldo</h2>
+        <p class="muted">Informe o valor, gere o PIX e aguarde a confirmacao do administrador. Depois disso o saldo aparece na carteira.</p>
+        <label>Valor do deposito
+          <input type="number" name="amount" min="<%= settings.depositMinimum %>" step="0.01" value="<%= settings.depositMinimum %>" required>
+        </label>
+        <button class="button" type="submit">Gerar PIX para carteira</button>
+      </form>
+
+      <article class="panel">
+        <h2>Como a entrada funciona</h2>
+        <dl class="details">
+          <div><dt>1. Deposito</dt><dd>Voce adiciona saldo por PIX.</dd></div>
+          <div><dt>2. Confirmacao</dt><dd>O admin confirma e o valor entra na carteira.</dd></div>
+          <div><dt>3. Participacao</dt><dd>Ao clicar em participar, a entrada e descontada automaticamente.</dd></div>
+        </dl>
+      </article>
+    </div>
+
+    <section class="table-panel">
+      <h2>Movimentacoes</h2>
+      <table>
+        <thead><tr><th>Tipo</th><th>Valor</th><th>Status</th><th>Metodo</th><th>Data</th><th>Acao</th></tr></thead>
+        <tbody>
+          <% if (!payments.length) { %>
+            <tr><td colspan="6">Nenhuma movimentacao ainda.</td></tr>
+          <% } %>
+          <% payments.forEach((payment) => { %>
+            <tr>
+              <td><%= labelForPaymentType(payment.type) %></td>
+              <td><%= formatMoney(payment.amount) %></td>
+              <td><span class="badge <%= payment.status %>"><%= labelForStatus(payment.status) %></span></td>
+              <td><%= labelForPaymentMethod(payment.method) %></td>
+              <td><%= formatDateTime(payment.createdAt) %></td>
+              <td>
+                <% if (payment.type === "deposit" && payment.status === "awaiting") { %>
+                  <a class="button small" href="/app/pagamentos/<%= payment.id %>">Ver PIX</a>
+                <% } else { %>
+                  -
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

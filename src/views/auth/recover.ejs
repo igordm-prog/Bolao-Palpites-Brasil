@@ -1,0 +1,12 @@
+<%- include("../partials/head", { title }) %>
+<section class="auth-shell">
+  <form class="panel form" action="/recuperar" method="post">
+    <h1>Recuperar senha</h1>
+    <label>E-mail cadastrado
+      <input type="email" name="email" required>
+    </label>
+    <button class="button full" type="submit">Gerar link</button>
+    <p class="muted">No MVP local, o link aparece na propria tela. Em producao, sera enviado por e-mail.</p>
+  </form>
+</section>
+<%- include("../partials/footer") %>

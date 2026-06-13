@@ -1,0 +1,14 @@
+<%- include("../partials/head", { title }) %>
+<section class="auth-shell">
+  <form class="panel form" action="/redefinir/<%= token %>" method="post">
+    <h1>Nova senha</h1>
+    <label>Senha
+      <input type="password" name="password" autocomplete="new-password" required>
+    </label>
+    <label>Confirmar senha
+      <input type="password" name="confirmPassword" autocomplete="new-password" required>
+    </label>
+    <button class="button full" type="submit">Salvar senha</button>
+  </form>
+</section>
+<%- include("../partials/footer") %>

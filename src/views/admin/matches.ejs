@@ -1,0 +1,52 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/boloes">Boloes</a>
+    <a href="/admin/jogos">Jogos</a>
+    <a href="/admin/resultados">Resultados</a>
+  </aside>
+  <div class="content">
+    <h1>Jogos</h1>
+    <form class="panel form" action="/admin/jogos" method="post">
+      <h2>Novo jogo</h2>
+      <div class="form-grid">
+        <label>Bolao
+          <select name="poolId" required>
+            <% pools.forEach((pool) => { %><option value="<%= pool.id %>"><%= pool.name %></option><% }) %>
+          </select>
+        </label>
+        <label>Campeonato
+          <select name="championship">
+            <% championships.forEach((item) => { %><option value="<%= item %>"><%= item %></option><% }) %>
+          </select>
+        </label>
+        <label>Rodada <input name="round"></label>
+        <label>Mandante <input name="homeTeam" required></label>
+        <label>Visitante <input name="awayTeam" required></label>
+        <label>Data <input type="date" name="matchDate" required></label>
+        <label>Horario <input type="time" name="matchTime" required></label>
+        <label>Local <input name="venue"></label>
+      </div>
+      <button class="button" type="submit">Cadastrar jogo</button>
+    </form>
+    <div class="table-panel">
+      <table>
+        <thead><tr><th>Bolao</th><th>Campeonato</th><th>Jogo</th><th>Data</th><th>Status</th></tr></thead>
+        <tbody>
+          <% matches.forEach((match) => { %>
+            <tr>
+              <td><%= match.poolName %></td>
+              <td><%= match.championship %></td>
+              <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong></td>
+              <td><%= match.matchDate %> <%= match.matchTime %></td>
+              <td><span class="badge"><%= labelForStatus(match.status) %></span></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<%- include("../partials/footer") %>

@@ -1,0 +1,34 @@
+<%- include("../partials/head", { title }) %>
+<section class="auth-shell wide">
+  <form class="panel form" action="/cadastro" method="post">
+    <h1>Criar conta</h1>
+    <div class="form-grid">
+      <label>Nome completo
+        <input name="name" autocomplete="name" required>
+      </label>
+      <label>CPF
+        <input name="cpf" inputmode="numeric" placeholder="000.000.000-00" required>
+      </label>
+      <label>Data de nascimento
+        <input type="date" name="birthDate" required>
+      </label>
+      <label>E-mail
+        <input type="email" name="email" autocomplete="email" required>
+      </label>
+      <label>Telefone/WhatsApp
+        <input name="phone" autocomplete="tel" required>
+      </label>
+      <label>Senha
+        <input type="password" name="password" autocomplete="new-password" required>
+      </label>
+      <label>Confirmar senha
+        <input type="password" name="confirmPassword" autocomplete="new-password" required>
+      </label>
+    </div>
+    <label class="check"><input type="checkbox" name="acceptedTerms" required> Aceito os Termos de Uso</label>
+    <label class="check"><input type="checkbox" name="acceptedPrivacy" required> Aceito a Politica de Privacidade</label>
+    <label class="check"><input type="checkbox" name="adultConfirmation" required> Confirmo que sou maior de 18 anos</label>
+    <button class="button full" type="submit">Cadastrar</button>
+  </form>
+</section>
+<%- include("../partials/footer") %>

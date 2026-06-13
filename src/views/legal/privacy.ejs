@@ -1,0 +1,44 @@
+<%- include("../partials/head", { title }) %>
+<section class="info-page">
+  <header class="info-hero">
+    <div>
+      <p class="eyebrow">Ajuda e privacidade</p>
+      <h1>Dados, segurança e suporte</h1>
+      <p>Veja como a plataforma usa seus dados e onde acompanhar carteira, bolões, ranking e solicitações de conta.</p>
+    </div>
+    <div class="info-total-card">
+      <span>CPF</span>
+      <strong>Protegido</strong>
+      <small>hash para login e exibição mascarada</small>
+    </div>
+  </header>
+
+  <div class="info-grid">
+    <article class="info-card">
+      <h2>Dados coletados</h2>
+      <p>Nome, CPF mascarado, nascimento, e-mail, telefone, pagamentos, palpites, pontuação, IP e registros operacionais.</p>
+    </article>
+    <article class="info-card">
+      <h2>Uso das informações</h2>
+      <p>Identificar participantes, prevenir fraude, controlar pagamentos, calcular ranking e cumprir obrigações legais aplicáveis.</p>
+    </article>
+    <article class="info-card">
+      <h2>Controle da conta</h2>
+      <p>Na área logada, o participante pode consultar perfil, carteira, histórico e solicitar exclusão de dados para avaliação administrativa.</p>
+    </article>
+  </div>
+
+  <section class="support-panel">
+    <div>
+      <p class="eyebrow">Suporte rápido</p>
+      <h2>Onde resolver cada coisa</h2>
+    </div>
+    <div class="support-list">
+      <a href="/app/carteira"><strong>Carteira</strong><span>Depositar saldo e acompanhar PIX.</span></a>
+      <a href="/app/conta"><strong>Conta</strong><span>Entrar em bolões e abrir seus jogos.</span></a>
+      <a href="/app/historico"><strong>Histórico</strong><span>Ver participações, pagamentos e desempenho.</span></a>
+      <a href="/regras"><strong>Regulamento</strong><span>Conferir pontuação e critérios de desempate.</span></a>
+    </div>
+  </section>
+</section>
+<%- include("../partials/footer") %>

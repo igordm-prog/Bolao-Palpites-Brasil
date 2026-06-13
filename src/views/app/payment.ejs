@@ -1,0 +1,21 @@
+<%- include("../partials/head", { title }) %>
+<section class="narrow">
+  <p class="eyebrow">Deposito na carteira</p>
+  <h1><%= payment.type === "deposit" ? "PIX para adicionar saldo" : pool.name %></h1>
+  <dl class="details">
+    <div><dt>Valor</dt><dd><%= formatMoney(payment.amount) %></dd></div>
+    <div><dt>Status</dt><dd><span class="badge"><%= labelForStatus(payment.status) %></span></dd></div>
+    <div><dt>Metodo</dt><dd><%= labelForPaymentMethod(payment.method) %></dd></div>
+  </dl>
+  <% if (payment.type === "deposit") { %>
+    <div class="pix-box">
+      <span>PIX copia e cola</span>
+      <code><%= payment.pixCode %></code>
+    </div>
+    <p class="muted">Quando o administrador confirmar este PIX, o valor entra na sua carteira. A entrada do bolao sera descontada automaticamente quando voce escolher participar.</p>
+  <% } else { %>
+    <p class="muted">Esta entrada foi paga com saldo da carteira.</p>
+  <% } %>
+  <a class="button secondary" href="/app/carteira">Voltar para carteira</a>
+</section>
+<%- include("../partials/footer") %>

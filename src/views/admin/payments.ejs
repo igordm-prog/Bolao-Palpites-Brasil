@@ -1,0 +1,42 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/pagamentos">Pagamentos</a>
+  </aside>
+  <div class="content">
+    <h1>Carteiras e pagamentos</h1>
+    <div class="table-panel">
+      <table>
+        <thead><tr><th>Usuario</th><th>Tipo</th><th>Referencia</th><th>Valor</th><th>Status</th><th>Transacao</th><th>Acao</th></tr></thead>
+        <tbody>
+          <% payments.forEach((payment) => { %>
+            <tr>
+              <td><strong><%= payment.user?.name || "-" %></strong><small><%= payment.user?.cpfMasked || "" %></small></td>
+              <td><%= labelForPaymentType(payment.type) %></td>
+              <td><%= payment.pool?.name || "Carteira" %></td>
+              <td><%= formatMoney(payment.amount) %></td>
+              <td><span class="badge"><%= labelForStatus(payment.status) %></span></td>
+              <td><%= payment.transactionId || "-" %></td>
+              <td>
+                <% if (payment.type === "deposit") { %>
+                  <form class="inline-form" action="/admin/pagamentos/<%= payment.id %>/status" method="post">
+                    <select name="status">
+                      <% paymentStatuses.forEach((status) => { %><option value="<%= status %>" <%= status === payment.status ? "selected" : "" %>><%= labelForStatus(status) %></option><% }) %>
+                    </select>
+                    <input name="transactionId" placeholder="ID transacao">
+                    <button class="button small" type="submit">Salvar</button>
+                  </form>
+                <% } else { %>
+                  Debitado automaticamente
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<%- include("../partials/footer") %>

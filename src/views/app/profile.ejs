@@ -1,0 +1,26 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Conta</h2>
+    <a href="/app/conta">Resumo</a>
+    <a href="/app/carteira">Carteira</a>
+    <a class="active" href="/app/perfil">Perfil</a>
+  </aside>
+  <div class="content narrow-content">
+    <h1>Meu perfil</h1>
+    <dl class="details">
+      <div><dt>Nome</dt><dd><%= user.name %></dd></div>
+      <div><dt>CPF</dt><dd><%= user.cpfMasked %></dd></div>
+      <div><dt>E-mail</dt><dd><%= user.email %></dd></div>
+      <div><dt>Telefone</dt><dd><%= user.phone %></dd></div>
+      <div><dt>Status</dt><dd><%= labelForStatus(user.status) %></dd></div>
+      <div><dt>Ultimo login</dt><dd><%= formatDateTime(user.lastLoginAt) %></dd></div>
+    </dl>
+    <form action="/app/lgpd/exclusao" method="post" class="panel form">
+      <h2>LGPD</h2>
+      <p class="muted">Registre uma solicitacao de exclusao de conta para avaliacao administrativa.</p>
+      <button class="button danger" type="submit">Solicitar exclusao</button>
+    </form>
+  </div>
+</section>
+<%- include("../partials/footer") %>

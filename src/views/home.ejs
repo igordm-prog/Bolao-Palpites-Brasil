@@ -1,0 +1,68 @@
+<%- include("partials/head", { title }) %>
+
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Series A, B, C e D aos fins de semana</p>
+    <h1>Bolao Brasil Placares</h1>
+    <p>Palpites de placar com regras claras: sem odds, sem cassino e com premiacao calculada sobre os participantes confirmados.</p>
+    <div class="actions">
+      <a class="button" href="/cadastro">Criar conta</a>
+      <a class="button secondary" href="/login">Entrar</a>
+    </div>
+  </div>
+  <div class="scoreboard-visual" aria-hidden="true">
+    <div class="pitch-lines"></div>
+    <div class="score-card">
+      <span>Rodada</span>
+      <strong>2 x 1</strong>
+      <small>palpite exato vale 5 pts</small>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <div class="section-header">
+    <div>
+      <p class="eyebrow">Disponiveis agora</p>
+      <h2>Boloes abertos</h2>
+    </div>
+    <a href="/regras">Ver regras</a>
+  </div>
+  <div class="grid cards">
+    <% if (!openPools.length) { %>
+      <p class="muted">Nenhum bolao aberto no momento.</p>
+    <% } %>
+    <% openPools.forEach((pool) => { %>
+      <article class="card">
+        <div class="card-head">
+          <h3><%= pool.name %></h3>
+          <span class="badge"><%= labelForStatus(pool.status) %></span>
+        </div>
+        <dl class="metrics">
+          <div><dt>Entrada</dt><dd><%= formatMoney(pool.entryValue) %></dd></div>
+          <div><dt>Premio liquido</dt><dd><%= formatMoney(pool.financials.netPrize) %></dd></div>
+          <div><dt>Participantes</dt><dd><%= pool.financials.paidCount %></dd></div>
+        </dl>
+        <p class="muted">Prazo: <%= formatDateTime(pool.deadlineAt) %></p>
+        <a class="button full" href="/app/conta">Ver na conta</a>
+      </article>
+    <% }) %>
+  </div>
+</section>
+
+<section class="band">
+  <div>
+    <h2>Operacao transparente</h2>
+    <p>90% da arrecadacao confirmada vai para premiacao e 10% fica como taxa administrativa configuravel.</p>
+  </div>
+  <div>
+    <h2>CPF e auditoria</h2>
+    <p>Cadastro unico por CPF, senha com hash, bloqueio de tentativas e logs para alteracoes sensiveis.</p>
+  </div>
+  <div>
+    <h2>Fim de semana</h2>
+    <p>O cadastro de jogos valida sabado e domingo para manter o escopo do Campeonato Brasileiro.</p>
+  </div>
+</section>
+
+<%- include("partials/footer") %>

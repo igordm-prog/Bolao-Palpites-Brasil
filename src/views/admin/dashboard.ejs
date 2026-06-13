@@ -1,0 +1,48 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/boloes">Boloes</a>
+    <a href="/admin/jogos">Jogos</a>
+    <a href="/admin/pagamentos">Pagamentos</a>
+    <a href="/admin/resultados">Resultados</a>
+    <a href="/admin/usuarios">Usuarios</a>
+    <a href="/admin/logs">Auditoria</a>
+  </aside>
+  <div class="content">
+    <div class="section-header">
+      <div>
+        <p class="eyebrow">Painel administrativo</p>
+        <h1>Resumo geral</h1>
+      </div>
+      <span class="badge">Pagamentos pendentes: <%= pendingPayments %></span>
+    </div>
+    <div class="grid cards">
+      <article class="card"><h3>Usuarios</h3><strong class="big-number"><%= usersCount %></strong></article>
+      <% pools.forEach((pool) => { %>
+        <article class="card">
+          <div class="card-head"><h3><%= pool.name %></h3><span class="badge"><%= labelForStatus(pool.status) %></span></div>
+          <dl class="metrics">
+            <div><dt>Entrada</dt><dd><%= formatMoney(pool.entryValue) %></dd></div>
+            <div><dt>Arrecadado</dt><dd><%= formatMoney(pool.financials.gross) %></dd></div>
+            <div><dt>Premio</dt><dd><%= formatMoney(pool.financials.netPrize) %></dd></div>
+          </dl>
+          <a class="button secondary full" href="/admin/ranking/<%= pool.id %>">Ver ranking</a>
+        </article>
+      <% }) %>
+    </div>
+    <section class="table-panel">
+      <h2>Ultimos logs</h2>
+      <table>
+        <thead><tr><th>Acao</th><th>Tabela</th><th>Data</th></tr></thead>
+        <tbody>
+          <% logs.forEach((log) => { %>
+            <tr><td><%= labelForAuditAction(log.action) %></td><td><%= labelForTableName(log.tableName) %></td><td><%= formatDateTime(log.createdAt) %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

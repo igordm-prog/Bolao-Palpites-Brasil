@@ -1,0 +1,38 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/usuarios">Usuarios</a>
+  </aside>
+  <div class="content">
+    <h1>Usuarios</h1>
+    <div class="table-panel">
+      <table>
+        <thead><tr><th>Nome</th><th>CPF</th><th>E-mail</th><th>Carteira</th><th>Perfil</th><th>Status</th><th>Acao</th></tr></thead>
+        <tbody>
+          <% users.forEach((user) => { %>
+            <tr>
+              <td><strong><%= user.name %></strong></td>
+              <td><%= user.cpfMasked %></td>
+              <td><%= user.email %></td>
+              <td><%= formatMoney(user.walletBalance) %></td>
+              <td><%= labelForRole(user.role) %></td>
+              <td><span class="badge"><%= labelForStatus(user.status) %></span></td>
+              <td>
+                <form class="inline-form" action="/admin/usuarios/<%= user.id %>/status" method="post">
+                  <select name="status">
+                    <option value="active" <%= user.status === "active" ? "selected" : "" %>>Ativo</option>
+                    <option value="blocked" <%= user.status === "blocked" ? "selected" : "" %>>Bloqueado</option>
+                  </select>
+                  <button class="button small" type="submit">Salvar</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<%- include("../partials/footer") %>

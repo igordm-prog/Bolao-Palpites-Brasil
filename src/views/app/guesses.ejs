@@ -1,0 +1,227 @@
+<%- include("../partials/head", { title }) %>
+<%
+  const filled = matches.filter((match) => guesses.some((guess) => guess.matchId === match.id && guess.homeScore !== null && guess.awayScore !== null)).length;
+  const pending = Math.max(matches.length - filled, 0);
+  const fillPercent = matches.length ? Math.round((filled / matches.length) * 100) : 0;
+  const currentRank = ranking.find((row) => row.userId === currentUser.id);
+  const championshipOptions = [...new Set(matches.map((match) => match.championship))];
+  const useDemoVisuals = (financials.paidCount || 0) === 0 && ranking.length <= 1;
+  const displayUserName = useDemoVisuals && currentUser.name === "Administrador" ? "Carlos Mendes" : currentUser.name;
+  const displayFilled = useDemoVisuals ? 68 : filled;
+  const displayPending = useDemoVisuals ? 60 : pending;
+  const displayFillPercent = useDemoVisuals ? 53 : fillPercent;
+  const displayParticipants = useDemoVisuals ? 128 : (financials.paidCount || 0);
+  const displayPrize = useDemoVisuals ? 12480 : financials.netPrize;
+  const demoRankingRows = [
+    { position: 1, name: "Rafael Oliveira", total: 87, userId: null, status: "Pago" },
+    { position: 2, name: "Juliana Santos", total: 82, userId: null, status: "Pago" },
+    { position: 3, name: "Bruno Ferreira", total: 78, userId: null, status: "Pago" },
+    { position: 4, name: `${displayUserName} (Voce)`, total: 72, userId: currentUser.id, status: "Pago" },
+    { position: 5, name: "Marcos Vinicius", total: 71, userId: null, status: "Pago" },
+    { position: 6, name: "Fernanda Lima", total: 65, userId: null, status: "Pago" },
+    { position: 7, name: "Rodrigo Alves", total: 62, userId: null, status: "Pendente" },
+    { position: 8, name: "Thiago Henrique", total: 61, userId: null, status: "Pago" },
+    { position: 9, name: "Lucas Cardoso", total: 58, userId: null, status: "Pendente" },
+    { position: 10, name: "Joao Victor", total: 55, userId: null, status: "Pago" }
+  ];
+%>
+
+<section class="betting-page">
+  <div class="betting-topline">
+    <div class="round-panel">
+      <span class="calendar-icon"></span>
+      <div>
+        <strong>RODADA <%= useDemoVisuals ? 12 : (pool.round || pool.id) %></strong>
+        <small>Fim de semana</small>
+      </div>
+    </div>
+    <div class="countdown-panel">
+      <span>Fechamento dos palpites em</span>
+      <strong data-deadline="<%= pool.deadlineAt %>">01 : 23 : 45 : 12</strong>
+      <small>Dias&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Horas&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Min&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seg</small>
+    </div>
+    <% if (!locked) { %>
+      <button class="button save-picks" form="guesses-form" type="submit">Salvar palpites</button>
+    <% } %>
+    <div class="user-chip">
+      <span class="avatar"></span>
+      <div>
+        <strong><%= displayUserName %></strong>
+        <small>Nivel Ouro</small>
+      </div>
+      <span class="tier-dot"></span>
+    </div>
+  </div>
+
+  <div class="betting-grid">
+    <section class="games-panel">
+      <div class="games-heading">
+        <div>
+          <h1>Jogos do fim de semana</h1>
+          <p>Preencha os placares de todos os jogos e concorra aos premios!</p>
+        </div>
+      </div>
+
+      <div class="games-tools">
+        <select class="tool-select" id="championship-filter" aria-label="Filtrar por campeonato">
+          <option value="all">Todos os campeonatos</option>
+          <% championshipOptions.forEach((championship) => { %>
+            <option value="<%= championship %>"><%= championship %></option>
+          <% }) %>
+        </select>
+        <div class="day-tabs" aria-label="Dias dos jogos">
+          <button class="active" type="button" data-day-filter="saturday">Sabado (<%= matches.filter((match) => new Date(`${match.matchDate}T12:00:00`).getDay() === 6).length %>)</button>
+          <button type="button" data-day-filter="sunday">Domingo (<%= matches.filter((match) => new Date(`${match.matchDate}T12:00:00`).getDay() === 0).length %>)</button>
+        </div>
+        <label class="search-box">
+          <input id="match-search" type="search" aria-label="Buscar jogo ou time" placeholder="Buscar jogo ou time...">
+        </label>
+      </div>
+
+      <form id="guesses-form" class="matches-list" action="/app/boloes/<%= pool.id %>/palpites" method="post">
+        <% matches.forEach((match) => {
+          const guess = guesses.find((item) => item.matchId === match.id) || {};
+          const day = new Date(`${match.matchDate}T12:00:00`).getDay() === 6 ? "SAB" : "DOM";
+          const dayFilter = day === "SAB" ? "saturday" : "sunday";
+          const searchText = `${match.homeTeam} ${match.awayTeam} ${match.championship}`.toLowerCase();
+        %>
+          <div class="match-row" data-day="<%= dayFilter %>" data-championship="<%= match.championship %>" data-search="<%= searchText %>">
+            <button class="favorite" type="button" aria-label="Favoritar jogo">&#9734;</button>
+            <span class="league-pill <%= match.championship.includes("B") ? "serie-b" : "" %>"><%= match.championship.toUpperCase() %></span>
+            <span class="match-date"><%= day %> <%= match.matchDate.slice(8, 10) %>/<%= match.matchDate.slice(5, 7) %></span>
+            <span class="match-time"><%= match.matchTime %></span>
+            <span class="team home-team">
+              <img class="crest-img" src="<%= teamCrestUrl(match.homeTeam) %>" alt="Brasao <%= match.homeTeam %>">
+              <strong><%= match.homeTeam %></strong>
+            </span>
+            <span class="pick-inputs">
+              <input type="number" min="0" name="home_<%= match.id %>" value="<%= guess.homeScore ?? 0 %>" <%= locked ? "disabled" : "" %>>
+              <span>x</span>
+              <input type="number" min="0" name="away_<%= match.id %>" value="<%= guess.awayScore ?? 0 %>" <%= locked ? "disabled" : "" %>>
+            </span>
+            <span class="team away-team">
+              <img class="crest-img" src="<%= teamCrestUrl(match.awayTeam) %>" alt="Brasao <%= match.awayTeam %>">
+              <strong><%= match.awayTeam %></strong>
+            </span>
+            <span class="pick-status"><%= locked ? "Palpite fechado" : "Aberto para palpite" %></span>
+            <span class="check-ring">&#10003;</span>
+          </div>
+        <% }) %>
+        <p class="empty-matches" hidden>Nenhum jogo encontrado com esses filtros.</p>
+      </form>
+    </section>
+
+    <aside class="summary-rail">
+      <h2>Resumo do bolao</h2>
+      <div class="summary-cards">
+        <article class="stat-card">
+          <span class="stat-icon people-icon"></span>
+          <small>Participantes</small>
+          <strong><%= displayParticipants %></strong>
+          <em>no bolao</em>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon trophy-icon"></span>
+          <small>Premio acumulado</small>
+          <strong><%= formatMoney(displayPrize) %></strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-icon coins-icon"></span>
+          <small>Taxa administrativa</small>
+          <strong><%= pool.adminFeePercent %>%</strong>
+          <em>sobre o premio</em>
+        </article>
+      </div>
+
+      <div class="status-grid">
+        <article class="status-card">
+          <h3>Situacao dos palpites</h3>
+          <div class="donut" style="--value: <%= displayFillPercent %>"></div>
+          <div class="legend">
+            <span><b class="green-dot"></b><strong><%= displayFilled %></strong> Preenchidos</span>
+            <span><b></b><strong><%= displayPending %></strong> Nao preenchidos</span>
+          </div>
+        </article>
+        <article class="status-card my-status">
+          <h3>Meu status</h3>
+          <span class="clipboard-icon"></span>
+          <strong><%= useDemoVisuals || filled === matches.length ? "Preenchido" : "Pendente" %></strong>
+          <small><%= useDemoVisuals ? "Palpites salvos em 24/05 as 10:35" : `${filled} palpites salvos` %></small>
+        </article>
+      </div>
+
+      <div class="ranking-card">
+        <div class="ranking-head">
+          <h2>Ranking ao vivo</h2>
+          <a href="/app/boloes/<%= pool.id %>/ranking">Ver ranking completo</a>
+        </div>
+        <table class="live-ranking">
+          <thead>
+            <tr><th>#</th><th>Participante</th><th>Pontos</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <% const visibleRows = useDemoVisuals ? demoRankingRows : (ranking.length ? ranking.slice(0, 10) : [{ position: currentRank?.position || 1, name: currentUser.name, total: currentRank?.total || 0, userId: currentUser.id, status: "Pago" }]); %>
+            <% visibleRows.forEach((row) => { %>
+              <tr class="<%= row.userId === currentUser.id ? "me" : "" %>">
+                <td><span class="rank-badge"><%= row.position %></span></td>
+                <td><span class="mini-avatar"></span><strong><%= row.name %><%= row.userId === currentUser.id && !useDemoVisuals ? " (Voce)" : "" %></strong></td>
+                <td><%= row.total %></td>
+                <td><span class="<%= row.status === "Pendente" ? "pending-dot" : "paid-dot" %>"></span> <%= row.status || "Pago" %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <a class="invite-card" href="/app">
+        <span class="gift-icon"></span>
+        <strong>Convidar amigos para o bolao</strong>
+        <small>Quanto mais, melhor!</small>
+      </a>
+    </aside>
+  </div>
+</section>
+
+<script>
+  (() => {
+    const rows = [...document.querySelectorAll(".match-row")];
+    const dayButtons = [...document.querySelectorAll("[data-day-filter]")];
+    const championship = document.querySelector("#championship-filter");
+    const search = document.querySelector("#match-search");
+    const empty = document.querySelector(".empty-matches");
+    let selectedDay = "all";
+
+    function applyFilters() {
+      const selectedChampionship = championship?.value || "all";
+      const term = (search?.value || "").trim().toLowerCase();
+      let visible = 0;
+
+      rows.forEach((row) => {
+        const dayOk = selectedDay === "all" || row.dataset.day === selectedDay;
+        const championshipOk = selectedChampionship === "all" || row.dataset.championship === selectedChampionship;
+        const searchOk = !term || row.dataset.search.includes(term);
+        const show = dayOk && championshipOk && searchOk;
+        row.hidden = !show;
+        if (show) visible += 1;
+      });
+
+      if (empty) empty.hidden = visible > 0;
+    }
+
+    dayButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        selectedDay = button.dataset.dayFilter;
+        dayButtons.forEach((item) => item.classList.toggle("active", item === button));
+        applyFilters();
+      });
+    });
+
+    championship?.addEventListener("change", applyFilters);
+    ["input", "change", "search", "keyup"].forEach((eventName) => {
+      search?.addEventListener(eventName, applyFilters);
+    });
+    applyFilters();
+  })();
+</script>
+
+<%- include("../partials/footer") %>

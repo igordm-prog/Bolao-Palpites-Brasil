@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title><%= title %> | <%= settings.appName %></title>
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark"><span></span></span>
+        <span>
+          <strong>BOLÃO</strong>
+          <small>DOS PLACARES</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a class="<%= currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites') ? 'active' : '' %>" href="/app/boloes/1/palpites">Jogos</a>
+        <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="/app/boloes/1/ranking">Ranking</a>
+        <a class="<%= currentPath === '/regras' ? 'active' : '' %>" href="/regras">Regulamento</a>
+        <a class="<%= currentPath === '/premiacoes' ? 'active' : '' %>" href="/premiacoes">Premiações</a>
+        <% if (isAdmin) { %><a class="<%= currentPath === '/admin/resultados' ? 'active' : '' %>" href="/admin/resultados">Resultados</a><% } %>
+        <a class="<%= currentPath.includes('/historico') ? 'active' : '' %>" href="<%= currentUser ? '/app/historico' : '/login' %>">Histórico</a>
+        <a class="<%= currentPath === '/privacidade' ? 'active' : '' %>" href="/privacidade">Ajuda</a>
+        <% if (currentUser) { %>
+          <a class="<%= currentPath === '/app/conta' || currentPath === '/app/carteira' || currentPath === '/app/perfil' ? 'active' : '' %>" href="/app/conta">Conta</a>
+          <% if (isAdmin) { %><a class="<%= currentPath === '/admin' ? 'active' : '' %>" href="/admin">Painel</a><% } %>
+          <form action="/logout" method="post">
+            <button class="link-button" type="submit">Sair</button>
+          </form>
+        <% } else { %>
+          <a class="<%= currentPath === '/login' ? 'active' : '' %>" href="/login">Entrar</a>
+          <a class="button small" href="/cadastro">Cadastrar</a>
+        <% } %>
+      </nav>
+    </header>
+    <main>
+      <% if (errors && errors.length) { %>
+        <section class="flash error"><% errors.forEach((item) => { %><p><%= item %></p><% }) %></section>
+      <% } %>
+      <% if (successes && successes.length) { %>
+        <section class="flash success"><% successes.forEach((item) => { %><p><%= item %></p><% }) %></section>
+      <% } %>

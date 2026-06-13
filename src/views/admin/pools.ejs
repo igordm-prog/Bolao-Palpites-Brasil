@@ -1,0 +1,55 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace">
+  <aside class="sidebar">
+    <h2>Painel</h2>
+    <a href="/admin">Painel</a>
+    <a href="/admin/boloes">Boloes</a>
+    <a href="/admin/jogos">Jogos</a>
+  </aside>
+  <div class="content">
+    <div class="section-header"><h1>Boloes</h1></div>
+    <form class="panel form" action="/admin/boloes" method="post">
+      <h2>Novo bolao</h2>
+      <div class="form-grid">
+        <label>Nome <input name="name" required></label>
+        <label>Rodada <input name="round"></label>
+        <label>Inicio <input type="datetime-local" name="startsAt"></label>
+        <label>Prazo de palpites <input type="datetime-local" name="deadlineAt" required></label>
+        <label>Valor da entrada <input type="number" step="0.01" min="20" name="entryValue" required></label>
+        <label>Taxa administrativa (%) <input type="number" step="0.01" min="0" max="100" name="adminFeePercent" value="<%= settings.entryAdminFeePercent %>"></label>
+        <label>Status
+          <select name="status">
+            <option value="draft">Rascunho</option>
+            <option value="open">Aberto</option>
+            <option value="closed">Fechado</option>
+            <option value="canceled">Cancelado</option>
+          </select>
+        </label>
+        <label>Premiacao
+          <select name="prizeModel">
+            <option value="winner_take_all">1o lugar 100%</option>
+            <option value="top_three">70/20/10</option>
+          </select>
+        </label>
+      </div>
+      <button class="button" type="submit">Criar bolao</button>
+    </form>
+    <div class="table-panel">
+      <table>
+        <thead><tr><th>Nome</th><th>Status</th><th>Entrada</th><th>Liquido</th><th>Prazo</th></tr></thead>
+        <tbody>
+          <% pools.forEach((pool) => { %>
+            <tr>
+              <td><strong><%= pool.name %></strong></td>
+              <td><span class="badge"><%= labelForStatus(pool.status) %></span></td>
+              <td><%= formatMoney(pool.entryValue) %></td>
+              <td><%= formatMoney(pool.financials.netPrize) %></td>
+              <td><%= formatDateTime(pool.deadlineAt) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<%- include("../partials/footer") %>

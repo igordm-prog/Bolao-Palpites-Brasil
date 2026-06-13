@@ -1,0 +1,38 @@
+<%- include("../partials/head", { title }) %>
+<section class="login-page">
+  <div class="login-copy">
+    <p class="eyebrow">Bolao de placares do fim de semana</p>
+    <h1>Entre para salvar seus palpites</h1>
+    <p>Faça login com CPF ou e-mail, acompanhe seus bolões e veja o ranking atualizado após os resultados.</p>
+    <div class="login-highlights">
+      <span><b></b> CPF unico por participante</span>
+      <span><b></b> Palpites bloqueados no prazo</span>
+      <span><b></b> Ranking automatico</span>
+    </div>
+  </div>
+
+  <form class="login-card form" action="/login" method="post">
+    <div class="login-card-head">
+      <span class="login-icon"></span>
+      <div>
+        <p class="eyebrow">Acesso seguro</p>
+        <h2>Entrar</h2>
+      </div>
+    </div>
+
+    <label>CPF ou e-mail
+      <input name="identifier" autocomplete="username" placeholder="Digite seu CPF ou e-mail" required>
+    </label>
+    <label>Senha
+      <input type="password" name="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+    </label>
+
+    <button class="button full login-submit" type="submit">Entrar agora</button>
+
+    <div class="login-links">
+      <a href="/recuperar">Esqueci minha senha</a>
+      <a href="/cadastro">Criar conta</a>
+    </div>
+  </form>
+</section>
+<%- include("../partials/footer") %>
