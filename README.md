@@ -1,6 +1,6 @@
-# Bolao Brasil Placares
+# Bolao Palpites Brasil
 
-MVP local para um site de bolao de placares do Campeonato Brasileiro, com cadastro por CPF, login, pagamentos manuais via PIX, palpites, pontuacao automatica, ranking e painel administrativo.
+MVP local para o Bolao Palpites Brasil, com cadastro por CPF, login, carteira PIX automatica via Asaas, palpites, pontuacao automatica, ranking e painel administrativo.
 
 ## Rodar localmente
 
@@ -53,16 +53,16 @@ Acesse `http://localhost:3000`.
 
 Administrador inicial:
 
-- E-mail: `admin@bolaobrasilplacares.com.br`
+- E-mail: `admin@bolaopalpitesbrasil.com.br`
 - Senha: `Admin@123`
 
 Altere a senha e o `SESSION_SECRET` antes de publicar.
 
 ## Nome sugerido
 
-Nome comercial: **Bolao Brasil Placares**
+Nome comercial: **Bolao Palpites Brasil**
 
-Dominio sugerido: `bolaobrasilplacares.com.br`
+Dominio sugerido: `bolaopalpitesbrasil.com.br`
 
 Confirme a disponibilidade no Registro.br antes do registro definitivo.
 

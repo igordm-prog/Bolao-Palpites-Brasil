@@ -1,8 +1,8 @@
 {
-  "name": "bolao-brasil-placares",
+  "name": "bolao-palpites-brasil",
   "version": "0.1.0",
   "private": true,
-  "description": "MVP local do Bolao Brasil Placares, plataforma de bolao de placares do Campeonato Brasileiro.",
+  "description": "MVP local do Bolao Palpites Brasil, plataforma de boloes de palpites do Campeonato Brasileiro.",
   "main": "server.js",
   "scripts": {
     "dev": "node --watch server.js",

@@ -22,6 +22,13 @@ admins.forEach((user) => {
 
 const cleanData = {
   ...data,
+  settings: {
+    ...data.settings,
+    appName: "Bolao Palpites Brasil",
+    domain: "bolaopalpitesbrasil.com.br",
+    pixKey: !data.settings?.pixKey || data.settings.pixKey === "pix@bolaobrasilplacares.com.br" ? "pix@bolaopalpitesbrasil.com.br" : data.settings.pixKey,
+    withdrawalMinimum: 20
+  },
   users: admins,
   pools: [],
   matches: [],

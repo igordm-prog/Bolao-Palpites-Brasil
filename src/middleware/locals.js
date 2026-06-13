@@ -33,7 +33,12 @@ function attachLocals(store) {
       data.pools[0] ||
       null;
     res.locals.currentUser = publicUser(user);
-    res.locals.settings = { ...data.settings, withdrawalMinimum: 20 };
+    res.locals.settings = {
+      ...data.settings,
+      appName: "Bolao Palpites Brasil",
+      domain: "bolaopalpitesbrasil.com.br",
+      withdrawalMinimum: 20
+    };
     res.locals.navPool = navPool;
     res.locals.navGamesHref = navPool ? `/app/boloes/${navPool.id}/palpites` : user ? "/app/conta" : "/login";
     res.locals.navRankingHref = navPool ? `/app/boloes/${navPool.id}/ranking` : user ? "/app/conta" : "/login";

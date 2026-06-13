@@ -65,5 +65,5 @@ app.use((req, res) => {
 
 const port = Number(process.env.PORT || 3000);
 app.listen(port, () => {
-  console.log(`Bolao Brasil Placares rodando em http://localhost:${port}`);
+  console.log(`Bolao Palpites Brasil rodando em http://localhost:${port}`);
 });

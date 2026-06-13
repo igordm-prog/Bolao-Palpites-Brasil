@@ -10,7 +10,7 @@ function ensureSeedData(store) {
         cpfHash: hashCpf("39053344705"),
         cpfMasked: maskCpf("39053344705"),
         birthDate: "1990-01-01",
-        email: process.env.ADMIN_EMAIL || "admin@bolaobrasilplacares.com.br",
+        email: process.env.ADMIN_EMAIL || "admin@bolaopalpitesbrasil.com.br",
         phone: "(00) 90000-0000",
         passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || "Admin@123", 12),
         role: "super_admin",

@@ -3,12 +3,12 @@ const path = require("path");
 
 const initialData = {
   settings: {
-    appName: "Bolao Brasil Placares",
-    domain: "bolaobrasilplacares.com.br",
+    appName: "Bolao Palpites Brasil",
+    domain: "bolaopalpitesbrasil.com.br",
     entryAdminFeePercent: 10,
     depositMinimum: 20,
     withdrawalMinimum: 20,
-    pixKey: "pix@bolaobrasilplacares.com.br"
+    pixKey: "pix@bolaopalpitesbrasil.com.br"
   },
   users: [],
   pools: [],

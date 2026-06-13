@@ -79,6 +79,11 @@ function getCurrentUser(data, req) {
 
 function normalizeData(data) {
   data.settings ||= {};
+  data.settings.appName = "Bolao Palpites Brasil";
+  data.settings.domain = "bolaopalpitesbrasil.com.br";
+  if (!data.settings.pixKey || data.settings.pixKey === "pix@bolaobrasilplacares.com.br") {
+    data.settings.pixKey = "pix@bolaopalpitesbrasil.com.br";
+  }
   data.settings.withdrawalMinimum = 20;
   data.payments ||= [];
   data.participations ||= [];
