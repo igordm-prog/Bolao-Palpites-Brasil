@@ -6,10 +6,13 @@
   "main": "server.js",
   "scripts": {
     "dev": "node --watch server.js",
+    "migrate:sqlite": "node scripts/migrate-json-to-sqlite.js",
     "start": "node server.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.10.0",
+    "dotenv": "^17.4.2",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.1",

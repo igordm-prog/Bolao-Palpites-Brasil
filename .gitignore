@@ -1,6 +1,12 @@
 node_modules/
 .env
 data/db.json
+data/*.sqlite
+data/*.sqlite-*
+data/*.sqlite.*
+data/*.db
+data/*.db-*
+data/*.db.*
 server.log
 server.err.log
 npm-debug.log*

@@ -9,6 +9,28 @@ npm install
 npm run dev
 ```
 
+## Banco de dados
+
+Por padrao, o projeto ainda consegue usar `data/db.json` quando `DATABASE_URL` nao estiver definido. Para producao, use SQLite:
+
+```env
+DATABASE_URL=sqlite:data/bolao.sqlite
+```
+
+Para migrar os dados atuais do JSON para SQLite:
+
+```bash
+npm run migrate:sqlite
+```
+
+O script le `data/db.json` e grava no arquivo definido em `DATABASE_URL`. Antes de rodar em producao, faca backup do JSON:
+
+```bash
+cp data/db.json /root/db-backup-$(date +%F-%H%M).json
+```
+
+Arquivos `.sqlite`, `.db`, logs e `.env` nao devem ser enviados ao GitHub.
+
 Acesse `http://localhost:3000`.
 
 Administrador inicial:
