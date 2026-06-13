@@ -15,9 +15,14 @@
             <tr>
               <td><strong><%= payment.user?.name || "-" %></strong><small><%= payment.user?.cpfMasked || "" %></small></td>
               <td><%= labelForPaymentType(payment.type) %></td>
-              <td><%= payment.pool?.name || "Carteira" %></td>
+              <td>
+                <%= payment.pool?.name || "Carteira" %>
+                <% if (payment.type === "withdrawal" && payment.payoutPixKey) { %>
+                  <small>Chave PIX: <%= payment.payoutPixKey %></small>
+                <% } %>
+              </td>
               <td><%= formatMoney(payment.amount) %></td>
-              <td><span class="badge"><%= labelForStatus(payment.status) %></span></td>
+              <td><span class="badge <%= payment.status %>"><%= labelForStatus(payment.status) %></span></td>
               <td>
                 <%= payment.transactionId || payment.providerPaymentId || "-" %>
                 <% if (payment.providerStatus) { %>
@@ -37,6 +42,16 @@
                     <form class="inline-form" action="/admin/pagamentos/<%= payment.id %>/sincronizar-asaas" method="post">
                       <button class="button small secondary" type="submit">Sincronizar Asaas</button>
                     </form>
+                  <% } %>
+                <% } else if (payment.type === "withdrawal") { %>
+                  <% if (payment.status === "awaiting") { %>
+                    <form class="inline-form" action="/admin/pagamentos/<%= payment.id %>/saque" method="post">
+                      <input name="transactionId" placeholder="ID do PIX pago">
+                      <button class="button small" name="action" value="paid" type="submit">Marcar pago</button>
+                      <button class="button small secondary" name="action" value="canceled" type="submit">Cancelar</button>
+                    </form>
+                  <% } else { %>
+                    Saque finalizado
                   <% } %>
                 <% } else { %>
                   Debitado automaticamente

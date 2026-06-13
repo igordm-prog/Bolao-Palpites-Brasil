@@ -7,7 +7,7 @@ const initialData = {
     domain: "bolaobrasilplacares.com.br",
     entryAdminFeePercent: 10,
     depositMinimum: 20,
-    withdrawalMinimum: 30,
+    withdrawalMinimum: 20,
     pixKey: "pix@bolaobrasilplacares.com.br"
   },
   users: [],

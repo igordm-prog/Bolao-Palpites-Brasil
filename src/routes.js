@@ -78,6 +78,8 @@ function getCurrentUser(data, req) {
 }
 
 function normalizeData(data) {
+  data.settings ||= {};
+  data.settings.withdrawalMinimum = 20;
   data.payments ||= [];
   data.participations ||= [];
   data.users.forEach((user) => {
@@ -475,6 +477,7 @@ function router(store) {
     const totals = {
       paidEntries: payments.filter((payment) => payment.type === "pool_entry" && payment.status === "paid").length,
       deposits: payments.filter((payment) => payment.type === "deposit" && payment.status === "paid").reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+      withdrawals: payments.filter((payment) => payment.type === "withdrawal" && payment.status === "paid").reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
       spent: payments.filter((payment) => payment.type === "pool_entry" && payment.status === "paid").reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
       guesses: data.guesses.filter((guess) => guess.userId === user.id).length
     };
@@ -533,6 +536,68 @@ function router(store) {
     audit(data, user.id, "wallet.deposit_created", "payments", null, { id: payment.id, amount }, req);
     store.write(data);
     return res.redirect(`/app/pagamentos/${payment.id}`);
+  });
+
+  app.post("/app/carteira/saques", requireAuth, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const amount = Number(req.body.amount);
+    const pixKey = String(req.body.pixKey || "").trim();
+    const minimum = Number(data.settings.withdrawalMinimum || 20);
+    if (!Number.isFinite(amount) || amount < minimum) {
+      req.flash("error", `O saque minimo e ${res.locals.formatMoney(minimum)}.`);
+      return res.redirect("/app/carteira");
+    }
+    if (amount > Number(user.walletBalance || 0)) {
+      req.flash("error", "Saldo insuficiente para solicitar este saque.");
+      return res.redirect("/app/carteira");
+    }
+    if (pixKey.length < 5) {
+      req.flash("error", "Informe a chave PIX para receber o saque.");
+      return res.redirect("/app/carteira");
+    }
+
+    const beforeBalance = Number(user.walletBalance || 0);
+    user.walletBalance = beforeBalance - amount;
+    const payment = {
+      id: store.nextId(data, "payments"),
+      type: "withdrawal",
+      userId: user.id,
+      poolId: null,
+      participationId: null,
+      amount,
+      status: "awaiting",
+      method: "PIX",
+      pixCode: null,
+      pixEncodedImage: null,
+      pixExpirationDate: null,
+      payoutPixKey: pixKey,
+      provider: "manual",
+      providerPaymentId: null,
+      providerStatus: null,
+      externalReference: null,
+      invoiceUrl: null,
+      transactionId: null,
+      createdAt: todayIso(),
+      updatedAt: todayIso(),
+      confirmedAt: null,
+      debitedAt: todayIso(),
+      refundedAt: null
+    };
+    data.payments.push(payment);
+    audit(
+      data,
+      user.id,
+      "wallet.withdrawal_requested",
+      "payments",
+      { id: user.id, walletBalance: beforeBalance },
+      { id: payment.id, amount, walletBalance: user.walletBalance },
+      req
+    );
+    store.write(data);
+    req.flash("success", "Saque solicitado. O valor ficou reservado enquanto o administrador processa o PIX.");
+    return res.redirect("/app/carteira");
   });
 
   app.get("/app/perfil", requireAuth, (req, res) => {
@@ -792,7 +857,7 @@ function router(store) {
       title: "Painel",
       usersCount: data.users.length,
       pools: data.pools.map((pool) => ({ ...pool, financials: poolFinancials(data, pool) })),
-      pendingPayments: data.payments.filter((payment) => payment.type === "deposit" && payment.status === "awaiting").length,
+      pendingPayments: data.payments.filter((payment) => ["deposit", "withdrawal"].includes(payment.type) && payment.status === "awaiting").length,
       logs: data.auditLogs.slice(-8).reverse()
     });
   });
@@ -962,6 +1027,60 @@ function router(store) {
     } catch (error) {
       req.flash("error", `Nao foi possivel consultar o Asaas: ${error.message}`);
     }
+    return res.redirect("/admin/pagamentos");
+  });
+
+  app.post("/admin/pagamentos/:id/saque", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const admin = getCurrentUser(data, req);
+    const payment = data.payments.find((item) => item.id === Number(req.params.id));
+    const user = payment ? data.users.find((item) => item.id === payment.userId) : null;
+    const action = req.body.action;
+    if (!payment || payment.type !== "withdrawal" || !user) {
+      req.flash("error", "Saque invalido.");
+      return res.redirect("/admin/pagamentos");
+    }
+    if (payment.status === "paid") {
+      req.flash("error", "Este saque ja foi marcado como pago.");
+      return res.redirect("/admin/pagamentos");
+    }
+    if (payment.status === "canceled" || payment.status === "refunded") {
+      req.flash("error", "Este saque ja foi cancelado.");
+      return res.redirect("/admin/pagamentos");
+    }
+
+    const before = { status: payment.status, refundedAt: payment.refundedAt, transactionId: payment.transactionId };
+    if (action === "paid") {
+      payment.status = "paid";
+      payment.transactionId = req.body.transactionId || payment.transactionId || `SAQUE-${payment.id}-${Date.now()}`;
+      payment.confirmedAt = todayIso();
+      payment.updatedAt = todayIso();
+      audit(data, admin.id, "wallet.withdrawal_paid", "payments", before, payment, req);
+      req.flash("success", "Saque marcado como pago.");
+    } else if (action === "canceled") {
+      const beforeBalance = Number(user.walletBalance || 0);
+      user.walletBalance = beforeBalance + Number(payment.amount || 0);
+      payment.status = "canceled";
+      payment.refundedAt = todayIso();
+      payment.updatedAt = todayIso();
+      audit(
+        data,
+        admin.id,
+        "wallet.withdrawal_canceled",
+        "users",
+        { id: user.id, walletBalance: beforeBalance, payment: before },
+        { id: user.id, walletBalance: user.walletBalance, paymentId: payment.id },
+        req
+      );
+      req.flash("success", "Saque cancelado e valor devolvido para a carteira.");
+    } else {
+      req.flash("error", "Acao de saque invalida.");
+      return res.redirect("/admin/pagamentos");
+    }
+
+    audit(data, admin.id, "payment.status_changed", "payments", before, payment, req);
+    store.write(data);
     return res.redirect("/admin/pagamentos");
   });
 

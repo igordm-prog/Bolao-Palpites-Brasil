@@ -88,7 +88,8 @@ function labelForStatus(status) {
 function labelForPaymentType(type) {
   const labels = {
     deposit: "Deposito",
-    pool_entry: "Entrada em bolao"
+    pool_entry: "Entrada em bolao",
+    withdrawal: "Saque"
   };
   return labels[type] || type || "-";
 }
@@ -128,6 +129,9 @@ function labelForAuditAction(action) {
     "wallet.deposit_reversed": "Deposito estornado",
     "wallet.pool_entry_debited": "Entrada debitada da carteira",
     "wallet.pending_entry_debited": "Entrada pendente debitada",
+    "wallet.withdrawal_requested": "Saque solicitado",
+    "wallet.withdrawal_paid": "Saque pago",
+    "wallet.withdrawal_canceled": "Saque cancelado",
     "guess.saved": "Palpite salvo",
     "lgpd.deletion_requested": "Exclusao solicitada"
   };

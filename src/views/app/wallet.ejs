@@ -35,12 +35,38 @@
         <button class="button" type="submit">Gerar PIX para carteira</button>
       </form>
 
+      <form class="panel form" action="/app/carteira/saques" method="post">
+        <h2>Solicitar saque</h2>
+        <p class="muted">Informe o valor e a chave PIX. O valor sai do saldo disponivel e fica reservado ate o administrador concluir o pagamento.</p>
+        <label>Valor do saque
+          <input type="number" name="amount" min="<%= settings.withdrawalMinimum %>" max="<%= user.walletBalance %>" step="0.01" value="<%= settings.withdrawalMinimum %>" required>
+        </label>
+        <label>Chave PIX
+          <input name="pixKey" autocomplete="off" placeholder="CPF, e-mail, telefone ou chave aleatoria" required>
+        </label>
+        <button class="button secondary" type="submit" <%= Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20) ? "disabled" : "" %>>Solicitar saque</button>
+        <% if (Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20)) { %>
+          <p class="muted">Voce precisa ter pelo menos <%= formatMoney(settings.withdrawalMinimum) %> disponivel para sacar.</p>
+        <% } %>
+      </form>
+    </div>
+
+    <div class="grid wallet-grid">
       <article class="panel">
         <h2>Como a entrada funciona</h2>
         <dl class="details">
           <div><dt>1. Deposito</dt><dd>Voce adiciona saldo por PIX.</dd></div>
           <div><dt>2. Confirmacao</dt><dd>O Asaas confirma e o valor entra na carteira.</dd></div>
           <div><dt>3. Participacao</dt><dd>Ao clicar em participar, a entrada e descontada automaticamente.</dd></div>
+        </dl>
+      </article>
+
+      <article class="panel">
+        <h2>Como o saque funciona</h2>
+        <dl class="details">
+          <div><dt>1. Solicitacao</dt><dd>Voce informa valor e chave PIX.</dd></div>
+          <div><dt>2. Reserva</dt><dd>O valor sai do saldo para evitar uso duplicado.</dd></div>
+          <div><dt>3. Pagamento</dt><dd>O administrador envia o PIX e marca o saque como pago.</dd></div>
         </dl>
       </article>
     </div>
@@ -63,6 +89,8 @@
               <td>
                 <% if (payment.type === "deposit" && payment.status === "awaiting") { %>
                   <a class="button small" href="/app/pagamentos/<%= payment.id %>">Ver PIX</a>
+                <% } else if (payment.type === "withdrawal" && payment.status === "awaiting") { %>
+                  Aguardando saque
                 <% } else { %>
                   -
                 <% } %>

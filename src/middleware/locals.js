@@ -28,7 +28,7 @@ function attachLocals(store) {
     const data = store.read();
     const user = data.users.find((item) => item.id === req.session.userId);
     res.locals.currentUser = publicUser(user);
-    res.locals.settings = data.settings;
+    res.locals.settings = { ...data.settings, withdrawalMinimum: 20 };
     res.locals.errors = req.flash("error");
     res.locals.successes = req.flash("success");
     res.locals.formatMoney = formatMoney;
