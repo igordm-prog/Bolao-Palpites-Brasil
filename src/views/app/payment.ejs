@@ -4,10 +4,28 @@
   <h1><%= payment.type === "deposit" ? "PIX para adicionar saldo" : pool.name %></h1>
   <dl class="details">
     <div><dt>Valor</dt><dd><%= formatMoney(payment.amount) %></dd></div>
-    <div><dt>Status</dt><dd><span class="badge"><%= labelForStatus(payment.status) %></span></dd></div>
+    <div><dt>Status</dt><dd><span id="payment-status-badge" class="badge <%= payment.status %>"><%= labelForStatus(payment.status) %></span></dd></div>
     <div><dt>Metodo</dt><dd><%= labelForPaymentMethod(payment.method) %></dd></div>
   </dl>
   <% if (payment.type === "deposit") { %>
+    <% if (payment.provider === "asaas") { %>
+      <div
+        id="payment-auto-sync"
+        class="payment-confirmation <%= payment.status === "paid" ? "is-confirmed" : "" %>"
+        data-sync-url="/app/pagamentos/<%= payment.id %>/sincronizar"
+        data-done="<%= payment.status === "paid" ? "true" : "false" %>"
+      >
+        <div class="payment-pending-state">
+          <strong>Aguardando confirmacao do PIX</strong>
+          <span id="payment-sync-message">Estamos verificando automaticamente com o Asaas.</span>
+        </div>
+        <div class="payment-confirmed-state">
+          <strong>Dinheiro depositado na carteira</strong>
+          <span id="payment-confirmed-message"><%= formatMoney(payment.amount) %> foi adicionado ao seu saldo.</span>
+          <a class="button" href="/app/carteira">Ir para carteira</a>
+        </div>
+      </div>
+    <% } %>
     <div class="pix-box">
       <% if (payment.pixEncodedImage) { %>
         <span>QR Code PIX</span>
@@ -22,15 +40,56 @@
     <% if (payment.invoiceUrl) { %>
       <a class="button" href="<%= payment.invoiceUrl %>" target="_blank" rel="noopener">Abrir cobranca no Asaas</a>
     <% } %>
-    <% if (payment.provider === "asaas" && payment.status !== "paid") { %>
-      <form action="/app/pagamentos/<%= payment.id %>/sincronizar" method="post">
-        <button class="button secondary" type="submit">Atualizar pagamento</button>
-      </form>
-    <% } %>
     <p class="muted">Quando o pagamento for confirmado pelo Asaas, o valor entra automaticamente na sua carteira. A entrada do bolao sera descontada quando voce escolher participar.</p>
   <% } else { %>
     <p class="muted">Esta entrada foi paga com saldo da carteira.</p>
   <% } %>
   <a class="button secondary" href="/app/carteira">Voltar para carteira</a>
 </section>
+<script>
+  (() => {
+    const syncBox = document.querySelector("[data-sync-url]");
+    if (!syncBox || syncBox.dataset.done === "true") return;
+
+    const badge = document.getElementById("payment-status-badge");
+    const message = document.getElementById("payment-sync-message");
+    const confirmedMessage = document.getElementById("payment-confirmed-message");
+    const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+    let attempts = 0;
+
+    async function syncPayment() {
+      attempts += 1;
+      message.textContent = attempts === 1
+        ? "Consultando o pagamento..."
+        : "Ainda aguardando confirmacao. Nova consulta automatica em instantes.";
+
+      try {
+        const response = await fetch(syncBox.dataset.syncUrl, {
+          method: "POST",
+          headers: { Accept: "application/json" }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.message || "Falha ao consultar pagamento.");
+
+        if (badge) {
+          badge.textContent = data.statusLabel || data.status || "Aguardando";
+          badge.className = `badge ${data.status || ""}`;
+        }
+
+        if (data.status === "paid" || data.credited) {
+          syncBox.dataset.done = "true";
+          syncBox.classList.add("is-confirmed");
+          confirmedMessage.textContent = `${money.format(data.walletBalance || 0)} disponivel na sua carteira.`;
+          return;
+        }
+      } catch (error) {
+        message.textContent = "Nao conseguimos consultar agora. Tentaremos novamente em instantes.";
+      }
+
+      window.setTimeout(syncPayment, 5000);
+    }
+
+    window.setTimeout(syncPayment, 2500);
+  })();
+</script>
 <%- include("../partials/footer") %>

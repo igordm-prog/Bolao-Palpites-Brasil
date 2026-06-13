@@ -983,6 +983,45 @@ select {
   border-radius: 8px;
 }
 
+.payment-confirmation {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid rgba(34, 211, 93, 0.32);
+  border-radius: 8px;
+  background: rgba(34, 211, 93, 0.09);
+}
+
+.payment-confirmation strong {
+  display: block;
+  color: #ffffff;
+  font-size: 1.05rem;
+}
+
+.payment-confirmation span {
+  display: block;
+  color: #b8cbd2;
+  margin-top: 4px;
+}
+
+.payment-confirmed-state {
+  display: none;
+}
+
+.payment-confirmation.is-confirmed {
+  background: rgba(34, 211, 93, 0.14);
+}
+
+.payment-confirmation.is-confirmed .payment-pending-state {
+  display: none;
+}
+
+.payment-confirmation.is-confirmed .payment-confirmed-state {
+  display: grid;
+  gap: 10px;
+}
+
 .pix-qr {
   width: min(260px, 100%);
   padding: 10px;

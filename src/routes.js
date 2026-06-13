@@ -13,6 +13,7 @@ const {
   isWeekend,
   maskCpf,
   onlyDigits,
+  labelForStatus,
   strongPassword,
   todayIso
 } = require("./utils");
@@ -652,8 +653,15 @@ function router(store) {
     normalizeData(data);
     const user = getCurrentUser(data, req);
     const payment = data.payments.find((item) => item.id === Number(req.params.id) && item.userId === user.id);
-    if (!payment) return res.redirect("/app/conta");
+    const wantsJson = req.get("accept")?.includes("application/json");
+    if (!payment) {
+      if (wantsJson) return res.status(404).json({ ok: false, message: "Pagamento nao encontrado." });
+      return res.redirect("/app/conta");
+    }
     if (payment.provider !== "asaas" || !payment.providerPaymentId) {
+      if (wantsJson) {
+        return res.status(400).json({ ok: false, message: "Este pagamento nao possui cobranca Asaas para sincronizar." });
+      }
       req.flash("error", "Este pagamento nao possui cobranca Asaas para sincronizar.");
       return res.redirect(`/app/pagamentos/${payment.id}`);
     }
@@ -662,8 +670,25 @@ function router(store) {
       const asaasPayment = await getAsaasPayment(payment.providerPaymentId);
       applyAsaasPaymentStatus(data, payment, asaasPayment, "MANUAL_SYNC", req);
       store.write(data);
+      const message = payment.status === "paid"
+        ? "Pagamento confirmado. O dinheiro foi depositado na sua carteira."
+        : "Aguardando confirmacao do Asaas.";
+      if (wantsJson) {
+        return res.json({
+          ok: true,
+          status: payment.status,
+          statusLabel: labelForStatus(payment.status),
+          providerStatus: payment.providerStatus,
+          credited: Boolean(payment.creditedAt),
+          walletBalance: Number(user.walletBalance || 0),
+          message
+        });
+      }
       req.flash("success", payment.status === "paid" ? "Pagamento confirmado e carteira atualizada." : "Status consultado no Asaas. O pagamento ainda nao consta como recebido.");
     } catch (error) {
+      if (wantsJson) {
+        return res.status(502).json({ ok: false, message: `Nao foi possivel consultar o Asaas: ${error.message}` });
+      }
       req.flash("error", `Nao foi possivel consultar o Asaas: ${error.message}`);
     }
     return res.redirect(`/app/pagamentos/${payment.id}`);
