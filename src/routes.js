@@ -211,6 +211,7 @@ function router(store) {
       name: String(name).trim(),
       cpfHash: hashCpf(normalizedCpf),
       cpfMasked: maskCpf(normalizedCpf),
+      billingCpfCnpj: normalizedCpf,
       birthDate,
       email: normalizedEmail,
       phone: String(phone).trim(),
@@ -479,10 +480,16 @@ function router(store) {
     normalizeData(data);
     const user = getCurrentUser(data, req);
     const amount = Number(req.body.amount);
+    const billingCpfCnpj = onlyDigits(req.body.billingCpfCnpj || user.billingCpfCnpj || "");
     if (!Number.isFinite(amount) || amount < Number(data.settings.depositMinimum || 0)) {
       req.flash("error", `O deposito minimo e ${res.locals.formatMoney(data.settings.depositMinimum)}.`);
       return res.redirect("/app/carteira");
     }
+    if (isAsaasEnabled() && ![11, 14].includes(billingCpfCnpj.length)) {
+      req.flash("error", "Informe o CPF ou CNPJ do titular para gerar o PIX automatico.");
+      return res.redirect("/app/carteira");
+    }
+    if (billingCpfCnpj) user.billingCpfCnpj = billingCpfCnpj;
     const payment = {
       id: store.nextId(data, "payments"),
       type: "deposit",

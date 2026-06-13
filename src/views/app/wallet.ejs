@@ -26,6 +26,12 @@
         <label>Valor do deposito
           <input type="number" name="amount" min="<%= settings.depositMinimum %>" step="0.01" value="<%= settings.depositMinimum %>" required>
         </label>
+        <% if (!user.billingCpfCnpj && !user.asaasCustomerId) { %>
+          <label>CPF ou CNPJ do titular
+            <input name="billingCpfCnpj" inputmode="numeric" autocomplete="off" placeholder="Somente numeros" required>
+          </label>
+          <p class="muted">Este dado e usado apenas para gerar a cobranca PIX no Asaas.</p>
+        <% } %>
         <button class="button" type="submit">Gerar PIX para carteira</button>
       </form>
 

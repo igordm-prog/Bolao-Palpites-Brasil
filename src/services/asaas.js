@@ -39,11 +39,15 @@ async function asaasRequest(path, { method = "GET", body } = {}) {
 
 async function ensureAsaasCustomer(data, user) {
   if (user.asaasCustomerId) return user.asaasCustomerId;
+  if (!user.billingCpfCnpj) {
+    throw new Error("Para criar esta cobranca e necessario preencher o CPF ou CNPJ do cliente.");
+  }
 
   const customer = await asaasRequest("/customers", {
     method: "POST",
     body: {
       name: user.name,
+      cpfCnpj: user.billingCpfCnpj,
       email: user.email,
       mobilePhone: user.phone,
       externalReference: `user-${user.id}`,
