@@ -27,8 +27,16 @@ function attachLocals(store) {
   return (req, res, next) => {
     const data = store.read();
     const user = data.users.find((item) => item.id === req.session.userId);
+    const navPool =
+      data.pools.find((pool) => pool.status === "open") ||
+      data.pools.find((pool) => pool.status === "draft") ||
+      data.pools[0] ||
+      null;
     res.locals.currentUser = publicUser(user);
     res.locals.settings = { ...data.settings, withdrawalMinimum: 20 };
+    res.locals.navPool = navPool;
+    res.locals.navGamesHref = navPool ? `/app/boloes/${navPool.id}/palpites` : user ? "/app/conta" : "/login";
+    res.locals.navRankingHref = navPool ? `/app/boloes/${navPool.id}/ranking` : user ? "/app/conta" : "/login";
     res.locals.errors = req.flash("error");
     res.locals.successes = req.flash("success");
     res.locals.formatMoney = formatMoney;

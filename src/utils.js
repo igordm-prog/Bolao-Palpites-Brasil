@@ -133,7 +133,8 @@ function labelForAuditAction(action) {
     "wallet.withdrawal_paid": "Saque pago",
     "wallet.withdrawal_canceled": "Saque cancelado",
     "guess.saved": "Palpite salvo",
-    "lgpd.deletion_requested": "Exclusao solicitada"
+    "lgpd.deletion_requested": "Exclusao solicitada",
+    "system.production_reset": "Sistema limpo para producao"
   };
   return labels[action] || action || "-";
 }

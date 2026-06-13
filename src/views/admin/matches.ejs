@@ -14,6 +14,7 @@
       <div class="form-grid">
         <label>Bolao
           <select name="poolId" required>
+            <% if (!pools.length) { %><option value="">Crie um bolao primeiro</option><% } %>
             <% pools.forEach((pool) => { %><option value="<%= pool.id %>"><%= pool.name %></option><% }) %>
           </select>
         </label>
@@ -29,12 +30,18 @@
         <label>Horario <input type="time" name="matchTime" required></label>
         <label>Local <input name="venue"></label>
       </div>
-      <button class="button" type="submit">Cadastrar jogo</button>
+      <button class="button" type="submit" <%= !pools.length ? "disabled" : "" %>>Cadastrar jogo</button>
+      <% if (!pools.length) { %>
+        <p class="muted">Antes de cadastrar jogos, crie um bolao em Boloes.</p>
+      <% } %>
     </form>
     <div class="table-panel">
       <table>
         <thead><tr><th>Bolao</th><th>Campeonato</th><th>Jogo</th><th>Data</th><th>Status</th></tr></thead>
         <tbody>
+          <% if (!matches.length) { %>
+            <tr><td colspan="5">Nenhum jogo cadastrado.</td></tr>
+          <% } %>
           <% matches.forEach((match) => { %>
             <tr>
               <td><%= match.poolName %></td>

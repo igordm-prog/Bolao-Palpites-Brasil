@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node --watch server.js",
     "migrate:sqlite": "node scripts/migrate-json-to-sqlite.js",
+    "reset:production": "node scripts/reset-production-data.js",
     "start": "node server.js"
   },
   "dependencies": {

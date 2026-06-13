@@ -5,25 +5,12 @@
   const fillPercent = matches.length ? Math.round((filled / matches.length) * 100) : 0;
   const currentRank = ranking.find((row) => row.userId === currentUser.id);
   const championshipOptions = [...new Set(matches.map((match) => match.championship))];
-  const useDemoVisuals = (financials.paidCount || 0) === 0 && ranking.length <= 1;
-  const displayUserName = useDemoVisuals && currentUser.name === "Administrador" ? "Carlos Mendes" : currentUser.name;
-  const displayFilled = useDemoVisuals ? 68 : filled;
-  const displayPending = useDemoVisuals ? 60 : pending;
-  const displayFillPercent = useDemoVisuals ? 53 : fillPercent;
-  const displayParticipants = useDemoVisuals ? 128 : (financials.paidCount || 0);
-  const displayPrize = useDemoVisuals ? 12480 : financials.netPrize;
-  const demoRankingRows = [
-    { position: 1, name: "Rafael Oliveira", total: 87, userId: null, status: "Pago" },
-    { position: 2, name: "Juliana Santos", total: 82, userId: null, status: "Pago" },
-    { position: 3, name: "Bruno Ferreira", total: 78, userId: null, status: "Pago" },
-    { position: 4, name: `${displayUserName} (Voce)`, total: 72, userId: currentUser.id, status: "Pago" },
-    { position: 5, name: "Marcos Vinicius", total: 71, userId: null, status: "Pago" },
-    { position: 6, name: "Fernanda Lima", total: 65, userId: null, status: "Pago" },
-    { position: 7, name: "Rodrigo Alves", total: 62, userId: null, status: "Pendente" },
-    { position: 8, name: "Thiago Henrique", total: 61, userId: null, status: "Pago" },
-    { position: 9, name: "Lucas Cardoso", total: 58, userId: null, status: "Pendente" },
-    { position: 10, name: "Joao Victor", total: 55, userId: null, status: "Pago" }
-  ];
+  const displayUserName = currentUser.name;
+  const displayFilled = filled;
+  const displayPending = pending;
+  const displayFillPercent = fillPercent;
+  const displayParticipants = financials.paidCount || 0;
+  const displayPrize = financials.netPrize;
 %>
 
 <section class="betting-page">
@@ -31,7 +18,7 @@
     <div class="round-panel">
       <span class="calendar-icon"></span>
       <div>
-        <strong>RODADA <%= useDemoVisuals ? 12 : (pool.round || pool.id) %></strong>
+        <strong>RODADA <%= pool.round || pool.id %></strong>
         <small>Fim de semana</small>
       </div>
     </div>
@@ -145,8 +132,8 @@
         <article class="status-card my-status">
           <h3>Meu status</h3>
           <span class="clipboard-icon"></span>
-          <strong><%= useDemoVisuals || filled === matches.length ? "Preenchido" : "Pendente" %></strong>
-          <small><%= useDemoVisuals ? "Palpites salvos em 24/05 as 10:35" : `${filled} palpites salvos` %></small>
+          <strong><%= matches.length && filled === matches.length ? "Preenchido" : "Pendente" %></strong>
+          <small><%= filled %> palpites salvos</small>
         </article>
       </div>
 
@@ -160,11 +147,11 @@
             <tr><th>#</th><th>Participante</th><th>Pontos</th><th>Status</th></tr>
           </thead>
           <tbody>
-            <% const visibleRows = useDemoVisuals ? demoRankingRows : (ranking.length ? ranking.slice(0, 10) : [{ position: currentRank?.position || 1, name: currentUser.name, total: currentRank?.total || 0, userId: currentUser.id, status: "Pago" }]); %>
+            <% const visibleRows = ranking.length ? ranking.slice(0, 10) : [{ position: currentRank?.position || 1, name: currentUser.name, total: currentRank?.total || 0, userId: currentUser.id, status: "Pago" }]; %>
             <% visibleRows.forEach((row) => { %>
               <tr class="<%= row.userId === currentUser.id ? "me" : "" %>">
                 <td><span class="rank-badge"><%= row.position %></span></td>
-                <td><span class="mini-avatar"></span><strong><%= row.name %><%= row.userId === currentUser.id && !useDemoVisuals ? " (Voce)" : "" %></strong></td>
+                <td><span class="mini-avatar"></span><strong><%= row.name %><%= row.userId === currentUser.id ? " (Voce)" : "" %></strong></td>
                 <td><%= row.total %></td>
                 <td><span class="<%= row.status === "Pendente" ? "pending-dot" : "paid-dot" %>"></span> <%= row.status || "Pago" %></td>
               </tr>

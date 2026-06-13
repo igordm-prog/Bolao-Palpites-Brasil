@@ -38,6 +38,9 @@
       <table>
         <thead><tr><th>Nome</th><th>Status</th><th>Entrada</th><th>Liquido</th><th>Prazo</th></tr></thead>
         <tbody>
+          <% if (!pools.length) { %>
+            <tr><td colspan="5">Nenhum bolao cadastrado. Crie o primeiro bolao acima.</td></tr>
+          <% } %>
           <% pools.forEach((pool) => { %>
             <tr>
               <td><strong><%= pool.name %></strong></td>

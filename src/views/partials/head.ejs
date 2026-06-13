@@ -16,8 +16,8 @@
         </span>
       </a>
       <nav class="nav">
-        <a class="<%= currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites') ? 'active' : '' %>" href="/app/boloes/1/palpites">Jogos</a>
-        <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="/app/boloes/1/ranking">Ranking</a>
+        <a class="<%= currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites') ? 'active' : '' %>" href="<%= navGamesHref %>">Jogos</a>
+        <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="<%= navRankingHref %>">Ranking</a>
         <a class="<%= currentPath === '/regras' ? 'active' : '' %>" href="/regras">Regulamento</a>
         <a class="<%= currentPath === '/premiacoes' ? 'active' : '' %>" href="/premiacoes">Premiações</a>
         <% if (isAdmin) { %><a class="<%= currentPath === '/admin/resultados' ? 'active' : '' %>" href="/admin/resultados">Resultados</a><% } %>
