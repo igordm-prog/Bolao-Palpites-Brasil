@@ -30,6 +30,63 @@ function getCurrentUser(data, req) {
   return data.users.find((user) => user.id === req.session.userId);
 }
 
+function recoveryCodeHash(token, code) {
+  return crypto.createHash("sha256").update(`${token}:${code}`).digest("hex");
+}
+
+function generateRecoveryCode() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function maskEmailAddress(email = "") {
+  const [name = "", domain = ""] = String(email).split("@");
+  if (!name || !domain) return "e-mail cadastrado";
+  return `${name.slice(0, 2)}***@${domain}`;
+}
+
+function maskPhoneNumber(phone = "") {
+  const digits = onlyDigits(phone);
+  if (digits.length < 4) return "celular cadastrado";
+  return `(**) *****-${digits.slice(-4)}`;
+}
+
+function recoveryDestinationLabel(method, user) {
+  if (method === "sms") return maskPhoneNumber(user.phone);
+  return maskEmailAddress(user.email);
+}
+
+function recoveryMethodLabel(method) {
+  const labels = {
+    email: "E-mail",
+    sms: "SMS",
+    cpf: "CPF"
+  };
+  return labels[method] || "E-mail";
+}
+
+function findUserForRecovery(data, method, identifier) {
+  const normalized = String(identifier || "").trim().toLowerCase();
+  if (method === "email") {
+    return data.users.find((user) => user.email === normalized);
+  }
+  if (method === "sms") {
+    const digits = onlyDigits(identifier);
+    return data.users.find((user) => onlyDigits(user.phone) === digits);
+  }
+  if (method === "cpf") {
+    const digits = onlyDigits(identifier);
+    if (!isValidCpf(digits)) return null;
+    const cpfHash = hashCpf(digits);
+    return data.users.find((user) => user.cpfHash === cpfHash);
+  }
+  return null;
+}
+
+function recoveryTestMessage(method, code, destination) {
+  const channel = method === "sms" ? "SMS" : "e-mail";
+  return `Codigo de teste enviado por ${channel} para ${destination}: ${code}`;
+}
+
 function normalizeData(data) {
   data.settings ||= {};
   data.settings.appName = "Bolao Palpites Brasil";
@@ -411,27 +468,89 @@ function router(store) {
   app.get("/recuperar", (req, res) => res.render("auth/recover", { title: "Recuperar senha" }));
 
   app.post("/recuperar", (req, res) => {
-    const email = String(req.body.email || "").trim().toLowerCase();
+    const method = ["email", "sms", "cpf"].includes(req.body.method) ? req.body.method : "email";
+    const identifier = String(req.body.identifier || "").trim();
     const data = store.read();
     normalizeData(data);
-    const user = data.users.find((item) => item.email === email);
+    const user = findUserForRecovery(data, method, identifier);
     if (user) {
       const token = crypto.randomBytes(24).toString("hex");
+      const code = generateRecoveryCode();
+      const destination = recoveryDestinationLabel(method, user);
       data.passwordResets.push({
         id: store.nextId(data, "passwordResets"),
         userId: user.id,
         token,
-        expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        codeHash: recoveryCodeHash(token, code),
+        method,
+        deliveryChannel: method === "sms" ? "sms" : "email",
+        destinationMasked: destination,
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        verifiedAt: null,
         usedAt: null,
         createdAt: todayIso()
       });
-      audit(data, user.id, "auth.password_reset_requested", "passwordResets", null, { email }, req);
+      audit(data, user.id, "auth.password_reset_requested", "passwordResets", null, { method, destination }, req);
       store.write(data);
-      req.flash("success", `Link local de redefinicao: /redefinir/${token}`);
+      req.flash("success", `Enviamos um codigo de 6 digitos por ${method === "sms" ? "SMS" : "e-mail"}.`);
+      req.flash("success", recoveryTestMessage(method, code, destination));
+      return res.redirect(`/recuperar/codigo/${token}`);
     } else {
-      req.flash("success", "Se o e-mail existir, enviaremos as instrucoes.");
+      req.flash("success", "Se os dados existirem, enviaremos as instrucoes de recuperacao.");
     }
     return res.redirect("/recuperar");
+  });
+
+  app.get("/recuperar/codigo/:token", (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const reset = data.passwordResets.find((item) => item.token === req.params.token && !item.usedAt);
+    if (!reset || new Date(reset.expiresAt) < new Date()) {
+      return res.status(400).render("status", {
+        title: "Codigo expirado",
+        message: "Solicite uma nova recuperacao de senha.",
+        actionHref: "/recuperar",
+        actionLabel: "Recuperar senha"
+      });
+    }
+    return res.render("auth/confirm-reset", {
+      title: "Confirmar codigo",
+      token: req.params.token,
+      methodLabel: recoveryMethodLabel(reset.method),
+      destination: reset.destinationMasked || "destino cadastrado",
+      attemptsLeft: Math.max(0, 5 - Number(reset.attempts || 0))
+    });
+  });
+
+  app.post("/recuperar/codigo/:token", (req, res) => {
+    const code = onlyDigits(req.body.code).slice(0, 6);
+    const data = store.read();
+    normalizeData(data);
+    const reset = data.passwordResets.find((item) => item.token === req.params.token && !item.usedAt);
+    if (!reset || new Date(reset.expiresAt) < new Date()) {
+      req.flash("error", "Codigo expirado. Solicite uma nova recuperacao.");
+      return res.redirect("/recuperar");
+    }
+
+    reset.attempts = Number(reset.attempts || 0);
+    if (reset.attempts >= 5) {
+      req.flash("error", "Muitas tentativas. Solicite um novo codigo.");
+      store.write(data);
+      return res.redirect("/recuperar");
+    }
+
+    if (code.length !== 6 || reset.codeHash !== recoveryCodeHash(reset.token, code)) {
+      reset.attempts += 1;
+      store.write(data);
+      req.flash("error", "Codigo invalido.");
+      return res.redirect(`/recuperar/codigo/${req.params.token}`);
+    }
+
+    reset.verifiedAt = todayIso();
+    store.write(data);
+    req.flash("success", "Codigo confirmado. Crie sua nova senha.");
+    return res.redirect(`/redefinir/${req.params.token}`);
   });
 
   app.post("/webhooks/asaas", (req, res) => {
@@ -502,6 +621,10 @@ function router(store) {
         actionLabel: "Recuperar senha"
       });
     }
+    if (reset.codeHash && !reset.verifiedAt) {
+      req.flash("error", "Confirme o codigo antes de criar a nova senha.");
+      return res.redirect(`/recuperar/codigo/${req.params.token}`);
+    }
     return res.render("auth/reset", { title: "Nova senha", token: req.params.token });
   });
 
@@ -517,6 +640,10 @@ function router(store) {
     if (!reset || new Date(reset.expiresAt) < new Date()) {
       req.flash("error", "Link expirado.");
       return res.redirect("/recuperar");
+    }
+    if (reset.codeHash && !reset.verifiedAt) {
+      req.flash("error", "Confirme o codigo antes de criar a nova senha.");
+      return res.redirect(`/recuperar/codigo/${req.params.token}`);
     }
     const user = data.users.find((item) => item.id === reset.userId);
     user.passwordHash = await bcrypt.hash(password, 12);
