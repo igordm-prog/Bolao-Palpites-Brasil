@@ -3,18 +3,13 @@
   <form class="panel form recover-card" action="/recuperar" method="post">
     <p class="eyebrow">Acesso seguro</p>
     <h1>Recuperar senha</h1>
-    <p class="muted">Escolha como quer confirmar sua identidade. O codigo tem validade de 15 minutos.</p>
+    <p class="muted">Escolha como quer confirmar sua identidade. O codigo sera enviado para o e-mail cadastrado e tem validade de 15 minutos.</p>
 
     <div class="recovery-methods" role="tablist" aria-label="Metodo de recuperacao">
       <label class="recovery-method active">
         <input type="radio" name="method" value="email" checked>
         <strong>E-mail</strong>
         <span>Receba um codigo no e-mail cadastrado.</span>
-      </label>
-      <label class="recovery-method">
-        <input type="radio" name="method" value="sms">
-        <strong>Celular</strong>
-        <span>Receba um codigo por SMS no telefone cadastrado.</span>
       </label>
       <label class="recovery-method">
         <input type="radio" name="method" value="cpf">
@@ -29,7 +24,7 @@
     </label>
 
     <button class="button full" type="submit">Enviar codigo</button>
-    <p class="muted">Em producao, o codigo sera enviado pelo canal escolhido. Enquanto o envio real nao estiver configurado, o codigo de teste aparece na tela.</p>
+    <p class="muted">Enquanto o SMTP nao estiver configurado, o codigo de teste aparece na tela. Depois da configuracao, ele sera enviado por e-mail.</p>
   </form>
 </section>
 <script>
@@ -39,7 +34,6 @@
     const input = document.getElementById("recovery-identifier");
     const config = {
       email: { label: "E-mail cadastrado", type: "email", inputmode: "email", placeholder: "voce@email.com", autocomplete: "email", maxLength: 254 },
-      sms: { label: "Celular cadastrado", type: "tel", inputmode: "numeric", placeholder: "(00) 00000-0000", autocomplete: "tel", maxLength: 15 },
       cpf: { label: "CPF cadastrado", type: "text", inputmode: "numeric", placeholder: "000.000.000-00", autocomplete: "off", maxLength: 14 }
     };
 
@@ -53,14 +47,6 @@
         .replace(/^(\d{3})(\d)/, "$1.$2")
         .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
         .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
-    }
-
-    function maskPhone(value) {
-      const digits = onlyDigits(value).slice(0, 11);
-      if (digits.length <= 2) return digits;
-      if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-      if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-      return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
     }
 
     function updateMethod(method) {
@@ -84,7 +70,6 @@
     input.addEventListener("input", () => {
       const method = document.querySelector('.recovery-method input[name="method"]:checked')?.value;
       if (method === "cpf") input.value = maskCpf(input.value);
-      if (method === "sms") input.value = maskPhone(input.value);
     });
   })();
 </script>

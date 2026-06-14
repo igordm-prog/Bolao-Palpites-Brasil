@@ -49,6 +49,22 @@ https://bolaopalpitesbrasil.com.br/webhooks/asaas
 
 Use o mesmo valor de `ASAAS_WEBHOOK_TOKEN` como token de autenticacao do webhook. Quando o Asaas enviar `PAYMENT_RECEIVED` ou `PAYMENT_CONFIRMED`, o sistema marca o deposito como pago e credita a carteira automaticamente.
 
+## Recuperacao de senha por e-mail
+
+Configure um e-mail do dominio e preencha o SMTP no `.env`:
+
+```env
+APP_URL=https://bolaopalpitesbrasil.com.br
+SMTP_HOST=smtp.seu-provedor.com.br
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=nao-responda@bolaopalpitesbrasil.com.br
+SMTP_PASS=sua-senha-do-email
+SMTP_FROM="Bolao Palpites Brasil <nao-responda@bolaopalpitesbrasil.com.br>"
+```
+
+Com SMTP configurado, o codigo de recuperacao e enviado para o e-mail cadastrado. Sem SMTP, o sistema mostra um codigo de teste na tela apenas para validacao local.
+
 Acesse `http://localhost:3000`.
 
 Administrador inicial:
@@ -70,7 +86,7 @@ Confirme a disponibilidade no Registro.br antes do registro definitivo.
 
 - Cadastro com CPF, maioridade e aceite de termos.
 - Login por e-mail ou CPF.
-- Recuperacao de senha por link local.
+- Recuperacao de senha por codigo enviado ao e-mail cadastrado.
 - Painel do participante.
 - Carteira simples com saldo e saque minimo configurado em R$ 30,00.
 - Deposito minimo exibido em R$ 20,00.
@@ -90,5 +106,5 @@ Confirme a disponibilidade no Registro.br antes do registro definitivo.
 - Trocar o armazenamento JSON por MySQL/PostgreSQL.
 - Configurar HTTPS, backup e monitoramento.
 - Integrar gateway PIX com webhook.
-- Integrar e-mail real para recuperacao de senha.
+- Configurar SMTP definitivo para recuperacao de senha.
 - Fazer revisao juridica antes de operar publicamente.

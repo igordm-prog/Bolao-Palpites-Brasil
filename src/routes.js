@@ -5,6 +5,7 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
+const { isEmailEnabled, sendPasswordResetCode } = require("./services/mailer");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
 const { championships, isKnownTeam, teams } = require("./teams");
 const {
@@ -44,21 +45,13 @@ function maskEmailAddress(email = "") {
   return `${name.slice(0, 2)}***@${domain}`;
 }
 
-function maskPhoneNumber(phone = "") {
-  const digits = onlyDigits(phone);
-  if (digits.length < 4) return "celular cadastrado";
-  return `(**) *****-${digits.slice(-4)}`;
-}
-
-function recoveryDestinationLabel(method, user) {
-  if (method === "sms") return maskPhoneNumber(user.phone);
+function recoveryDestinationLabel(user) {
   return maskEmailAddress(user.email);
 }
 
 function recoveryMethodLabel(method) {
   const labels = {
     email: "E-mail",
-    sms: "SMS",
     cpf: "CPF"
   };
   return labels[method] || "E-mail";
@@ -69,10 +62,6 @@ function findUserForRecovery(data, method, identifier) {
   if (method === "email") {
     return data.users.find((user) => user.email === normalized);
   }
-  if (method === "sms") {
-    const digits = onlyDigits(identifier);
-    return data.users.find((user) => onlyDigits(user.phone) === digits);
-  }
   if (method === "cpf") {
     const digits = onlyDigits(identifier);
     if (!isValidCpf(digits)) return null;
@@ -82,9 +71,8 @@ function findUserForRecovery(data, method, identifier) {
   return null;
 }
 
-function recoveryTestMessage(method, code, destination) {
-  const channel = method === "sms" ? "SMS" : "e-mail";
-  return `Codigo de teste enviado por ${channel} para ${destination}: ${code}`;
+function recoveryTestMessage(code, destination) {
+  return `Codigo de teste enviado por e-mail para ${destination}: ${code}`;
 }
 
 function normalizeData(data) {
@@ -467,8 +455,8 @@ function router(store) {
 
   app.get("/recuperar", (req, res) => res.render("auth/recover", { title: "Recuperar senha" }));
 
-  app.post("/recuperar", (req, res) => {
-    const method = ["email", "sms", "cpf"].includes(req.body.method) ? req.body.method : "email";
+  app.post("/recuperar", async (req, res) => {
+    const method = ["email", "cpf"].includes(req.body.method) ? req.body.method : "email";
     const identifier = String(req.body.identifier || "").trim();
     const data = store.read();
     normalizeData(data);
@@ -476,14 +464,14 @@ function router(store) {
     if (user) {
       const token = crypto.randomBytes(24).toString("hex");
       const code = generateRecoveryCode();
-      const destination = recoveryDestinationLabel(method, user);
+      const destination = recoveryDestinationLabel(user);
       data.passwordResets.push({
         id: store.nextId(data, "passwordResets"),
         userId: user.id,
         token,
         codeHash: recoveryCodeHash(token, code),
         method,
-        deliveryChannel: method === "sms" ? "sms" : "email",
+        deliveryChannel: "email",
         destinationMasked: destination,
         attempts: 0,
         expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
@@ -493,8 +481,18 @@ function router(store) {
       });
       audit(data, user.id, "auth.password_reset_requested", "passwordResets", null, { method, destination }, req);
       store.write(data);
-      req.flash("success", `Enviamos um codigo de 6 digitos por ${method === "sms" ? "SMS" : "e-mail"}.`);
-      req.flash("success", recoveryTestMessage(method, code, destination));
+      if (isEmailEnabled()) {
+        try {
+          await sendPasswordResetCode(user, code);
+          req.flash("success", `Enviamos um codigo de 6 digitos para ${destination}.`);
+        } catch (error) {
+          req.flash("error", `Nao foi possivel enviar o e-mail agora: ${error.message}`);
+          req.flash("success", recoveryTestMessage(code, destination));
+        }
+      } else {
+        req.flash("success", "SMTP ainda nao configurado. Use o codigo de teste abaixo para validar o fluxo.");
+        req.flash("success", recoveryTestMessage(code, destination));
+      }
       return res.redirect(`/recuperar/codigo/${token}`);
     } else {
       req.flash("success", "Se os dados existirem, enviaremos as instrucoes de recuperacao.");
