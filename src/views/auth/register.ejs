@@ -10,7 +10,7 @@
         <input name="cpf" inputmode="numeric" placeholder="000.000.000-00" required>
       </label>
       <label>Data de nascimento
-        <input type="date" name="birthDate" required>
+        <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" required>
       </label>
       <label>E-mail
         <input type="email" name="email" autocomplete="email" required>
@@ -31,4 +31,14 @@
     <button class="button full" type="submit">Cadastrar</button>
   </form>
 </section>
+<script>
+  (() => {
+    const birthDate = document.querySelector('input[name="birthDate"]');
+    birthDate?.addEventListener("input", () => {
+      const digits = birthDate.value.replace(/\D/g, "").slice(0, 8);
+      const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
+      birthDate.value = parts.join("/");
+    });
+  })();
+</script>
 <%- include("../partials/footer") %>

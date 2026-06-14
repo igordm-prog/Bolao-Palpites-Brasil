@@ -13,6 +13,7 @@ const {
   isValidCpf,
   isWeekend,
   maskCpf,
+  normalizeBirthDate,
   onlyDigits,
   labelForStatus,
   strongPassword,
@@ -298,11 +299,12 @@ function router(store) {
     } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedCpf = onlyDigits(cpf);
+    const normalizedBirthDate = normalizeBirthDate(birthDate);
 
     const errors = [];
-    if (!name || !normalizedEmail || !phone || !birthDate) errors.push("Preencha todos os dados obrigatorios.");
+    if (!name || !normalizedEmail || !phone || !normalizedBirthDate) errors.push("Preencha todos os dados obrigatorios.");
     if (!isValidCpf(normalizedCpf)) errors.push("CPF invalido.");
-    if (!isAdult(birthDate) || adultConfirmation !== "on") errors.push("E necessario confirmar maioridade.");
+    if (!isAdult(normalizedBirthDate) || adultConfirmation !== "on") errors.push("E necessario confirmar maioridade.");
     if (!strongPassword(password)) {
       errors.push("A senha precisa ter 8 caracteres, maiuscula, minuscula, numero e caractere especial.");
     }
@@ -322,7 +324,7 @@ function router(store) {
       cpfHash: hashCpf(normalizedCpf),
       cpfMasked: maskCpf(normalizedCpf),
       billingCpfCnpj: normalizedCpf,
-      birthDate,
+      birthDate: normalizedBirthDate,
       email: normalizedEmail,
       phone: String(phone).trim(),
       passwordHash,

@@ -14,6 +14,17 @@ function maskCpf(cpf) {
   return `***.***.***-${digits.slice(-2)}`;
 }
 
+function normalizeBirthDate(value = "") {
+  const raw = String(value).trim();
+  const brMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brMatch) {
+    const [, day, month, year] = brMatch;
+    return `${year}-${month}-${day}`;
+  }
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return isoMatch ? raw : "";
+}
+
 function isValidCpf(cpf) {
   const digits = onlyDigits(cpf);
   if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) return false;
@@ -29,7 +40,8 @@ function isValidCpf(cpf) {
 }
 
 function isAdult(dateString) {
-  const birth = new Date(`${dateString}T00:00:00`);
+  const normalized = normalizeBirthDate(dateString);
+  const birth = new Date(`${normalized}T00:00:00`);
   if (Number.isNaN(birth.getTime())) return false;
   const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
@@ -185,6 +197,7 @@ function publicUser(user) {
 
 module.exports = {
   onlyDigits,
+  normalizeBirthDate,
   hashCpf,
   maskCpf,
   isValidCpf,
