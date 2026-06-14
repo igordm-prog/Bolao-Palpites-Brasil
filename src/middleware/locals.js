@@ -40,7 +40,7 @@ function attachLocals(store) {
       withdrawalMinimum: 20
     };
     res.locals.navPool = navPool;
-    res.locals.navGamesHref = navPool ? `/app/boloes/${navPool.id}/palpites` : user ? "/app/conta" : "/login";
+    res.locals.navGamesHref = user ? "/app/boloes" : "/login";
     res.locals.navRankingHref = navPool ? `/app/boloes/${navPool.id}/ranking` : user ? "/app/conta" : "/login";
     res.locals.errors = req.flash("error");
     res.locals.successes = req.flash("success");

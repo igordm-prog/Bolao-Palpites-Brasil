@@ -58,6 +58,90 @@ function poolFinancials(data, pool) {
   };
 }
 
+function isPoolAuditAvailable(pool) {
+  return ["closed", "finished"].includes(pool.status) || new Date(pool.deadlineAt) <= new Date();
+}
+
+function buildPoolAuditSnapshot(data, pool, generatedAt = todayIso()) {
+  const matches = data.matches
+    .filter((match) => match.poolId === pool.id)
+    .slice()
+    .sort((a, b) => `${a.matchDate} ${a.matchTime}`.localeCompare(`${b.matchDate} ${b.matchTime}`))
+    .map((match) => ({
+      id: match.id,
+      championship: match.championship,
+      round: match.round,
+      homeTeam: match.homeTeam,
+      awayTeam: match.awayTeam,
+      matchDate: match.matchDate,
+      matchTime: match.matchTime,
+      venue: match.venue,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      status: match.status
+    }));
+
+  const participants = data.participations
+    .filter((participation) => participation.poolId === pool.id && participation.status === "paid")
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .map((participation) => {
+      const user = data.users.find((item) => item.id === participation.userId);
+      return {
+        participationId: participation.id,
+        userId: participation.userId,
+        name: user?.name || "Participante removido",
+        cpfMasked: user?.cpfMasked || "***.***.***-**",
+        joinedAt: participation.createdAt,
+        guesses: matches.map((match) => {
+          const guess = data.guesses.find(
+            (item) => item.poolId === pool.id && item.matchId === match.id && item.userId === participation.userId
+          );
+          return {
+            matchId: match.id,
+            homeTeam: match.homeTeam,
+            awayTeam: match.awayTeam,
+            homeScore: guess?.homeScore ?? null,
+            awayScore: guess?.awayScore ?? null,
+            points: guess?.points ?? 0,
+            category: guess?.category || "pending",
+            savedAt: guess?.updatedAt || guess?.createdAt || null
+          };
+        })
+      };
+    });
+
+  const payload = {
+    version: 1,
+    generatedAt,
+    pool: {
+      id: pool.id,
+      name: pool.name,
+      round: pool.round,
+      status: pool.status,
+      startsAt: pool.startsAt,
+      deadlineAt: pool.deadlineAt,
+      entryValue: Number(pool.entryValue || 0),
+      adminFeePercent: Number(pool.adminFeePercent || 0),
+      prizeModel: pool.prizeModel
+    },
+    financials: poolFinancials(data, pool),
+    matches,
+    participants,
+    ranking: rankingForPool(data, pool.id)
+  };
+  const hash = crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+  return { generatedAt, hash, payload };
+}
+
+function ensurePoolAuditSnapshot(data, pool, actorId = null, req = null) {
+  if (pool.auditSnapshot?.hash && pool.auditSnapshot?.payload) return pool.auditSnapshot;
+  const snapshot = buildPoolAuditSnapshot(data, pool);
+  pool.auditSnapshot = snapshot;
+  audit(data, actorId, "pool.audit_generated", "pools", null, { id: pool.id, hash: snapshot.hash }, req);
+  return snapshot;
+}
+
 function requirePaidParticipation(data, userId, poolId) {
   return data.participations.find(
     (participation) =>
@@ -174,10 +258,7 @@ function router(store) {
   app.get("/", (req, res) => {
     const data = store.read();
     normalizeData(data);
-    const openPools = data.pools
-      .filter((pool) => pool.status === "open")
-      .map((pool) => ({ ...pool, financials: poolFinancials(data, pool) }));
-    res.render("home", { title: data.settings.appName, openPools });
+    res.render("home", { title: data.settings.appName });
   });
 
   app.get("/termos", (req, res) => res.render("legal/terms", { title: "Termos de Uso" }));
@@ -436,6 +517,27 @@ function router(store) {
     return res.redirect("/app/conta");
   });
 
+  app.get("/app/boloes", requireAuth, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const participations = data.participations.filter((item) => item.userId === user.id);
+    const pools = data.pools
+      .map((pool) => ({
+        ...pool,
+        financials: poolFinancials(data, pool),
+        matchesCount: data.matches.filter((match) => match.poolId === pool.id).length,
+        participation: participations.find((item) => item.poolId === pool.id) || null,
+        auditAvailable: isPoolAuditAvailable(pool),
+        auditSnapshot: pool.auditSnapshot || null
+      }))
+      .sort((a, b) => {
+        const order = { open: 0, draft: 1, closed: 2, finished: 3, canceled: 4 };
+        return (order[a.status] ?? 9) - (order[b.status] ?? 9) || new Date(b.deadlineAt) - new Date(a.deadlineAt);
+      });
+    res.render("app/pools", { title: "Boloes", user, pools });
+  });
+
   app.get("/app/conta", requireAuth, (req, res) => {
     const data = store.read();
     normalizeData(data);
@@ -670,6 +772,41 @@ function router(store) {
     store.write(data);
     req.flash("success", "Solicitacao registrada. O administrador devera avaliar a retencao legal dos dados.");
     res.redirect("/app/perfil");
+  });
+
+  app.get("/app/boloes/:id/auditoria", requireAuth, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const pool = data.pools.find((item) => item.id === Number(req.params.id));
+    if (!pool || !isPoolAuditAvailable(pool)) {
+      req.flash("error", "A auditoria fica disponivel quando o bolao estiver fechado.");
+      return res.redirect("/app/boloes");
+    }
+    const snapshot = ensurePoolAuditSnapshot(data, pool, req.session.userId, req);
+    store.write(data);
+    res.render("app/audit", {
+      title: "Auditoria do bolao",
+      pool,
+      snapshot,
+      matches: snapshot.payload.matches,
+      participants: snapshot.payload.participants
+    });
+  });
+
+  app.get("/app/boloes/:id/auditoria/download", requireAuth, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const pool = data.pools.find((item) => item.id === Number(req.params.id));
+    if (!pool || !isPoolAuditAvailable(pool)) {
+      req.flash("error", "A auditoria fica disponivel quando o bolao estiver fechado.");
+      return res.redirect("/app/boloes");
+    }
+    const snapshot = ensurePoolAuditSnapshot(data, pool, req.session.userId, req);
+    store.write(data);
+    const fileName = `auditoria-bolao-${pool.id}-${snapshot.hash.slice(0, 10)}.json`;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    return res.send(JSON.stringify(snapshot, null, 2));
   });
 
   app.post("/app/boloes/:id/participar", requireAuth, (req, res) => {
@@ -946,8 +1083,8 @@ function router(store) {
     normalizeData(data);
     const user = getCurrentUser(data, req);
     const entryValue = Number(req.body.entryValue);
-    if (!req.body.name || !req.body.deadlineAt || entryValue < data.settings.depositMinimum) {
-      req.flash("error", `Informe nome, prazo e entrada minima de R$ ${data.settings.depositMinimum},00.`);
+    if (!req.body.name || !req.body.deadlineAt || !Number.isFinite(entryValue) || entryValue <= 0) {
+      req.flash("error", "Informe nome, prazo e o valor da entrada definido pelo administrador.");
       return res.redirect("/admin/boloes");
     }
     const pool = {
@@ -963,10 +1100,39 @@ function router(store) {
       createdAt: todayIso()
     };
     data.pools.push(pool);
+    if (pool.status === "closed") ensurePoolAuditSnapshot(data, pool, user.id, req);
     audit(data, user.id, "pool.created", "pools", null, pool, req);
     store.write(data);
     req.flash("success", "Bolao criado.");
     res.redirect("/admin/boloes");
+  });
+
+  app.post("/admin/boloes/:id/status", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const pool = data.pools.find((item) => item.id === Number(req.params.id));
+    const allowed = ["draft", "open", "closed", "finished"];
+    if (!pool || !allowed.includes(req.body.status)) {
+      req.flash("error", "Status de bolao invalido.");
+      return res.redirect("/admin/boloes");
+    }
+    const before = { status: pool.status, auditSnapshot: pool.auditSnapshot?.hash || null };
+    pool.status = req.body.status;
+    pool.updatedAt = todayIso();
+    if (pool.status === "closed" || pool.status === "finished") {
+      ensurePoolAuditSnapshot(data, pool, user.id, req);
+    } else {
+      delete pool.auditSnapshot;
+    }
+    audit(data, user.id, "pool.status_changed", "pools", before, {
+      id: pool.id,
+      status: pool.status,
+      auditSnapshot: pool.auditSnapshot?.hash || null
+    }, req);
+    store.write(data);
+    req.flash("success", pool.auditSnapshot ? "Status atualizado e auditoria preservada." : "Status atualizado.");
+    return res.redirect("/admin/boloes");
   });
 
   app.post("/admin/boloes/:id/excluir", requireAuth, requireAdmin, (req, res) => {

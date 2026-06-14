@@ -1,0 +1,39 @@
+<article class="pool-item pool-audit-item">
+  <div class="pool-main">
+    <div class="pool-title">
+      <h3><%= pool.name %></h3>
+      <span class="badge <%= pool.status %>"><%= labelForStatus(pool.status) %></span>
+    </div>
+    <dl class="pool-metrics">
+      <div><dt>Entrada</dt><dd><%= formatMoney(pool.entryValue) %></dd></div>
+      <div><dt>Premio</dt><dd><%= formatMoney(pool.financials.netPrize) %></dd></div>
+      <div><dt>Participantes</dt><dd><%= pool.financials.paidCount %></dd></div>
+      <div><dt>Jogos</dt><dd><%= pool.matchesCount %></dd></div>
+      <div><dt>Prazo</dt><dd><%= formatDateTime(pool.deadlineAt) %></dd></div>
+      <div><dt>Auditoria</dt><dd><%= pool.auditAvailable ? "Disponivel" : "Apos fechamento" %></dd></div>
+    </dl>
+    <% if (pool.auditSnapshot?.hash) { %>
+      <p class="muted">Hash da auditoria: <code><%= pool.auditSnapshot.hash.slice(0, 18) %>...</code></p>
+    <% } %>
+  </div>
+  <div class="pool-actions">
+    <% if (pool.status === "open") { %>
+      <% if (isAdmin || pool.participation?.status === "paid") { %>
+        <a class="button full" href="/app/boloes/<%= pool.id %>/palpites">Abrir jogos</a>
+      <% } else if (Number(user.walletBalance || 0) >= Number(pool.entryValue || 0)) { %>
+        <form action="/app/boloes/<%= pool.id %>/participar" method="post">
+          <button class="button full" type="submit">Participar</button>
+        </form>
+      <% } else { %>
+        <a class="button full" href="/app/carteira">Depositar saldo</a>
+      <% } %>
+      <a class="button secondary full" href="/app/boloes/<%= pool.id %>/ranking">Ranking</a>
+    <% } else if (pool.auditAvailable) { %>
+      <a class="button full" href="/app/boloes/<%= pool.id %>/auditoria">Ver auditoria</a>
+      <a class="button secondary full" href="/app/boloes/<%= pool.id %>/auditoria/download">Baixar auditoria</a>
+      <a class="button secondary full" href="/app/boloes/<%= pool.id %>/ranking">Ranking</a>
+    <% } else { %>
+      <span class="badge <%= pool.status %>"><%= labelForStatus(pool.status) %></span>
+    <% } %>
+  </div>
+</article>

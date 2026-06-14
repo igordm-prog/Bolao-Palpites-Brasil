@@ -1,0 +1,60 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace account-workspace">
+  <aside class="sidebar account-sidebar">
+    <h2>Auditoria</h2>
+    <a href="/app/boloes">Boloes</a>
+    <a href="/app/historico">Historico</a>
+    <a href="/app/conta">Conta</a>
+  </aside>
+  <div class="content account-content">
+    <header class="account-hero">
+      <div>
+        <p class="eyebrow">Prova do bolao fechado</p>
+        <h1><%= pool.name %></h1>
+        <p>Snapshot gerado em <%= formatDateTime(snapshot.generatedAt) %>. O hash abaixo identifica o arquivo de auditoria baixavel.</p>
+      </div>
+      <div class="account-wallet audit-hash-card">
+        <span>Hash SHA-256</span>
+        <code><%= snapshot.hash %></code>
+        <a class="button small" href="/app/boloes/<%= pool.id %>/auditoria/download">Baixar JSON</a>
+      </div>
+    </header>
+
+    <section class="table-panel audit-table-panel">
+      <h2>Palpites dos participantes</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Participante</th>
+            <th>CPF</th>
+            <% matches.forEach((match) => { %>
+              <th><%= match.homeTeam %> x <%= match.awayTeam %></th>
+            <% }) %>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!participants.length) { %>
+            <tr><td colspan="<%= matches.length + 2 %>">Nenhum participante pago neste bolao.</td></tr>
+          <% } %>
+          <% participants.forEach((participant) => { %>
+            <tr>
+              <td><strong><%= participant.name %></strong></td>
+              <td><%= participant.cpfMasked %></td>
+              <% participant.guesses.forEach((guess) => { %>
+                <td>
+                  <% if (guess.homeScore === null || guess.awayScore === null) { %>
+                    <span class="muted">Sem palpite</span>
+                  <% } else { %>
+                    <strong><%= guess.homeScore %> x <%= guess.awayScore %></strong>
+                    <small><%= guess.points %> pts</small>
+                  <% } %>
+                </td>
+              <% }) %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

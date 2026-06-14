@@ -1,0 +1,77 @@
+<%- include("../partials/head", { title }) %>
+<%
+  const openPools = pools.filter((pool) => pool.status === "open");
+  const closedPools = pools.filter((pool) => pool.status !== "open");
+%>
+<section class="workspace account-workspace">
+  <aside class="sidebar account-sidebar">
+    <h2>Boloes</h2>
+    <a class="active" href="/app/boloes">Todos os boloes</a>
+    <a href="/app/conta">Conta</a>
+    <a href="/app/carteira">Carteira</a>
+    <a href="/app/historico">Historico</a>
+  </aside>
+  <div class="content account-content">
+    <header class="account-hero">
+      <div>
+        <p class="eyebrow">Jogos e auditoria</p>
+        <h1>Boloes abertos e fechados</h1>
+        <p>Participe dos abertos com saldo da carteira. Depois do fechamento, confira os palpites dos participantes e baixe a auditoria.</p>
+      </div>
+      <div class="account-wallet">
+        <span>Saldo disponivel</span>
+        <strong><%= formatMoney(user.walletBalance) %></strong>
+        <small>Entrada debitada automaticamente ao participar.</small>
+        <div class="account-actions">
+          <a class="button small" href="/app/carteira">Depositar</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="account-section">
+      <div class="account-section-head">
+        <div>
+          <p class="eyebrow">Disponiveis</p>
+          <h2>Boloes abertos</h2>
+        </div>
+      </div>
+      <div class="pool-list">
+        <% if (!openPools.length) { %>
+          <article class="pool-item single">
+            <div>
+              <h3>Nenhum bolao aberto agora</h3>
+              <p class="muted">Quando o administrador abrir uma rodada, ela aparecera aqui.</p>
+            </div>
+            <a class="button secondary full" href="/app/carteira">Adicionar saldo</a>
+          </article>
+        <% } %>
+        <% openPools.forEach((pool) => { %>
+          <%- include("pool-card", { pool, user }) %>
+        <% }) %>
+      </div>
+    </section>
+
+    <section class="account-section">
+      <div class="account-section-head">
+        <div>
+          <p class="eyebrow">Transparencia</p>
+          <h2>Boloes fechados e auditoria</h2>
+        </div>
+      </div>
+      <div class="pool-list">
+        <% if (!closedPools.length) { %>
+          <article class="pool-item single">
+            <div>
+              <h3>Nenhum bolao fechado ainda</h3>
+              <p class="muted">As auditorias ficarao disponiveis depois do fechamento dos palpites.</p>
+            </div>
+          </article>
+        <% } %>
+        <% closedPools.forEach((pool) => { %>
+          <%- include("pool-card", { pool, user }) %>
+        <% }) %>
+      </div>
+    </section>
+  </div>
+</section>
+<%- include("../partials/footer") %>

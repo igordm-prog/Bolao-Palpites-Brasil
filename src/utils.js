@@ -121,6 +121,8 @@ function labelForAuditAction(action) {
     "user.registered": "Usuario cadastrado",
     "user.status_changed": "Status do usuario alterado",
     "pool.created": "Bolao criado",
+    "pool.status_changed": "Status do bolao alterado",
+    "pool.audit_generated": "Auditoria do bolao gerada",
     "pool.canceled": "Bolao cancelado",
     "pool.deleted": "Bolao excluido",
     "match.created": "Jogo cadastrado",

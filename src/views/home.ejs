@@ -1,69 +1,78 @@
 <%- include("partials/head", { title }) %>
 
-<section class="hero">
-  <div class="hero-copy">
-    <p class="eyebrow">Palpites do futebol brasileiro</p>
-    <h1>Bolao Palpites Brasil</h1>
-    <p>Crie sua conta, participe dos boloes, acompanhe ranking ao vivo e movimente sua carteira com PIX automatico.</p>
+<section class="home-bet-hero">
+  <div class="home-bet-copy">
+    <p class="eyebrow">Bolao de placares com carteira PIX</p>
+    <h1>Palpite no placar. Disputa no ranking. Premio na rodada.</h1>
+    <p>Entre nos boloes abertos, escolha os placares dos jogos e acompanhe tudo em uma experiencia com ritmo de casa de aposta, mas com regra clara de bolao.</p>
     <div class="actions">
-      <a class="button" href="/cadastro">Criar conta</a>
-      <a class="button secondary" href="/login">Entrar</a>
+      <a class="button" href="/login">Entrar</a>
+      <a class="button secondary" href="/cadastro">Cadastrar</a>
     </div>
   </div>
-  <div class="scoreboard-visual" aria-hidden="true">
-    <div class="pitch-lines"></div>
-    <img class="hero-brand-mark" src="/img/brand/logo-mark.svg" alt="">
-    <div class="score-card">
-      <span>Rodada</span>
-      <strong>2 x 1</strong>
-      <small>palpite exato vale 5 pts</small>
+
+  <div class="bet-slip-demo" aria-label="Simulacao visual do bolao">
+    <div class="bet-slip-head">
+      <span>Rodada aberta</span>
+      <strong>Bolao Palpites Brasil</strong>
+    </div>
+    <div class="odds-board">
+      <div class="odds-row">
+        <span>Flamengo</span>
+        <strong>2</strong>
+        <em>x</em>
+        <strong>1</strong>
+        <span>Palmeiras</span>
+      </div>
+      <div class="odds-row">
+        <span>Corinthians</span>
+        <strong>0</strong>
+        <em>x</em>
+        <strong>0</strong>
+        <span>Gremio</span>
+      </div>
+      <div class="odds-row">
+        <span>Bahia</span>
+        <strong>1</strong>
+        <em>x</em>
+        <strong>2</strong>
+        <span>Cruzeiro</span>
+      </div>
+    </div>
+    <div class="ticket-preview">
+      <span>Simulacao do bilhete</span>
+      <div>
+        <strong>Entrada definida pelo admin</strong>
+        <small>Saldo debitado da carteira ao participar</small>
+      </div>
+      <div>
+        <strong>Ranking automatico</strong>
+        <small>Pontos calculados apos os resultados</small>
+      </div>
+      <div>
+        <strong>Auditoria ao fechar</strong>
+        <small>Palpites ficam disponiveis para conferencia</small>
+      </div>
     </div>
   </div>
 </section>
 
-<section class="section">
-  <div class="section-header">
-    <div>
-      <p class="eyebrow">Disponiveis agora</p>
-      <h2>Boloes abertos</h2>
-    </div>
-    <a href="/regras">Ver regras</a>
-  </div>
-  <div class="grid cards">
-    <% if (!openPools.length) { %>
-      <p class="muted">Nenhum bolao aberto no momento.</p>
-    <% } %>
-    <% openPools.forEach((pool) => { %>
-      <article class="card">
-        <div class="card-head">
-          <h3><%= pool.name %></h3>
-          <span class="badge"><%= labelForStatus(pool.status) %></span>
-        </div>
-        <dl class="metrics">
-          <div><dt>Entrada</dt><dd><%= formatMoney(pool.entryValue) %></dd></div>
-          <div><dt>Premio liquido</dt><dd><%= formatMoney(pool.financials.netPrize) %></dd></div>
-          <div><dt>Participantes</dt><dd><%= pool.financials.paidCount %></dd></div>
-        </dl>
-        <p class="muted">Prazo: <%= formatDateTime(pool.deadlineAt) %></p>
-        <a class="button full" href="/app/conta">Ver na conta</a>
-      </article>
-    <% }) %>
-  </div>
-</section>
-
-<section class="band">
-  <div>
-    <h2>Operacao transparente</h2>
-    <p>90% da arrecadacao confirmada vai para premiacao e 10% fica como taxa administrativa configuravel.</p>
-  </div>
-  <div>
-    <h2>CPF e auditoria</h2>
-    <p>Cadastro unico por CPF, senha com hash, bloqueio de tentativas e logs para alteracoes sensiveis.</p>
-  </div>
-  <div>
-    <h2>Fim de semana</h2>
-    <p>O cadastro de jogos valida sabado e domingo para manter o escopo do Campeonato Brasileiro.</p>
-  </div>
+<section class="home-info-strip">
+  <article>
+    <span>1</span>
+    <h2>Deposite por PIX</h2>
+    <p>O saldo entra na carteira e fica pronto para participar dos boloes abertos.</p>
+  </article>
+  <article>
+    <span>2</span>
+    <h2>Entre no bolao</h2>
+    <p>O valor definido pelo administrador e debitado automaticamente da carteira.</p>
+  </article>
+  <article>
+    <span>3</span>
+    <h2>Confira a auditoria</h2>
+    <p>Depois do fechamento, os palpites podem ser conferidos e baixados.</p>
+  </article>
 </section>
 
 <%- include("partials/footer") %>

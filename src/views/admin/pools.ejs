@@ -15,7 +15,7 @@
         <label>Rodada <input name="round"></label>
         <label>Inicio <input type="datetime-local" name="startsAt"></label>
         <label>Prazo de palpites <input type="datetime-local" name="deadlineAt" required></label>
-        <label>Valor da entrada <input type="number" step="0.01" min="20" name="entryValue" required></label>
+        <label>Valor da entrada <input type="number" step="0.01" min="0.01" name="entryValue" required></label>
         <label>Taxa administrativa (%) <input type="number" step="0.01" min="0" max="100" name="adminFeePercent" value="<%= settings.entryAdminFeePercent %>"></label>
         <label>Status
           <select name="status">
@@ -36,10 +36,10 @@
     </form>
     <div class="table-panel">
       <table>
-        <thead><tr><th>Nome</th><th>Status</th><th>Entrada</th><th>Liquido</th><th>Prazo</th><th>Acoes</th></tr></thead>
+        <thead><tr><th>Nome</th><th>Status</th><th>Entrada</th><th>Liquido</th><th>Prazo</th><th>Auditoria</th><th>Acoes</th></tr></thead>
         <tbody>
           <% if (!pools.length) { %>
-            <tr><td colspan="6">Nenhum bolao cadastrado. Crie o primeiro bolao acima.</td></tr>
+            <tr><td colspan="7">Nenhum bolao cadastrado. Crie o primeiro bolao acima.</td></tr>
           <% } %>
           <% pools.forEach((pool) => { %>
             <tr>
@@ -49,6 +49,24 @@
               <td><%= formatMoney(pool.financials.netPrize) %></td>
               <td><%= formatDateTime(pool.deadlineAt) %></td>
               <td>
+                <% if (pool.auditSnapshot?.hash) { %>
+                  <small><code><%= pool.auditSnapshot.hash.slice(0, 14) %>...</code></small>
+                <% } else { %>
+                  <small class="muted">Nao gerada</small>
+                <% } %>
+              </td>
+              <td>
+                <% if (pool.status !== "canceled") { %>
+                  <form class="inline-form" action="/admin/boloes/<%= pool.id %>/status" method="post">
+                    <select name="status" aria-label="Status do bolao">
+                      <option value="draft" <%= pool.status === "draft" ? "selected" : "" %>>Rascunho</option>
+                      <option value="open" <%= pool.status === "open" ? "selected" : "" %>>Aberto</option>
+                      <option value="closed" <%= pool.status === "closed" ? "selected" : "" %>>Fechado</option>
+                      <option value="finished" <%= pool.status === "finished" ? "selected" : "" %>>Finalizado</option>
+                    </select>
+                    <button class="button small" type="submit">Salvar</button>
+                  </form>
+                <% } %>
                 <% if (pool.status !== "canceled") { %>
                   <form class="inline-form" action="/admin/boloes/<%= pool.id %>/excluir" method="post" onsubmit="return confirm('Excluir/cancelar este bolao? Se houver participantes pagos, o valor da entrada sera devolvido para a carteira de cada usuario.');">
                     <button class="button danger small" type="submit"><%= pool.financials.paidCount ? "Cancelar e devolver" : "Excluir" %></button>

@@ -15,14 +15,14 @@
         <img class="brand-logo" src="/img/brand/logo-horizontal.svg" alt="Bolao Palpites Brasil">
       </a>
       <nav class="nav">
-        <a class="<%= currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites') ? 'active' : '' %>" href="<%= navGamesHref %>">Jogos</a>
-        <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="<%= navRankingHref %>">Ranking</a>
-        <a class="<%= currentPath === '/regras' ? 'active' : '' %>" href="/regras">Regulamento</a>
-        <a class="<%= currentPath === '/premiacoes' ? 'active' : '' %>" href="/premiacoes">Premiações</a>
-        <% if (isAdmin) { %><a class="<%= currentPath === '/admin/resultados' ? 'active' : '' %>" href="/admin/resultados">Resultados</a><% } %>
-        <a class="<%= currentPath.includes('/historico') ? 'active' : '' %>" href="<%= currentUser ? '/app/historico' : '/login' %>">Histórico</a>
-        <a class="<%= currentPath === '/privacidade' ? 'active' : '' %>" href="/privacidade">Ajuda</a>
         <% if (currentUser) { %>
+          <a class="<%= currentPath === '/app/boloes' || (currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites')) ? 'active' : '' %>" href="<%= navGamesHref %>">Jogos</a>
+          <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="<%= navRankingHref %>">Ranking</a>
+          <a class="<%= currentPath === '/regras' ? 'active' : '' %>" href="/regras">Regulamento</a>
+          <a class="<%= currentPath === '/premiacoes' ? 'active' : '' %>" href="/premiacoes">Premiacoes</a>
+          <% if (isAdmin) { %><a class="<%= currentPath === '/admin/resultados' ? 'active' : '' %>" href="/admin/resultados">Resultados</a><% } %>
+          <a class="<%= currentPath.includes('/historico') ? 'active' : '' %>" href="/app/historico">Historico</a>
+          <a class="<%= currentPath === '/privacidade' ? 'active' : '' %>" href="/privacidade">Ajuda</a>
           <a class="<%= currentPath === '/app/conta' || currentPath === '/app/carteira' || currentPath === '/app/perfil' ? 'active' : '' %>" href="/app/conta">Conta</a>
           <% if (isAdmin) { %><a class="<%= currentPath === '/admin' ? 'active' : '' %>" href="/admin">Painel</a><% } %>
           <form action="/logout" method="post">
