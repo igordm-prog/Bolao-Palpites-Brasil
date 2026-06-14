@@ -24,8 +24,28 @@
           </select>
         </label>
         <label>Rodada <input name="round"></label>
-        <label>Mandante <input name="homeTeam" required></label>
-        <label>Visitante <input name="awayTeam" required></label>
+        <label class="team-select-field">Mandante
+          <span class="team-select-control">
+            <img class="team-select-crest" data-team-preview="homeTeam" src="<%= teamCrestUrl(teams[0]?.name || "Time") %>" alt="">
+            <select name="homeTeam" required>
+              <option value="">Selecione o mandante</option>
+              <% teams.forEach((team) => { %>
+                <option value="<%= team.name %>" data-championship="<%= team.championship %>" data-crest="<%= teamCrestUrl(team.name) %>"><%= team.name %></option>
+              <% }) %>
+            </select>
+          </span>
+        </label>
+        <label class="team-select-field">Visitante
+          <span class="team-select-control">
+            <img class="team-select-crest" data-team-preview="awayTeam" src="<%= teamCrestUrl(teams[1]?.name || "Time") %>" alt="">
+            <select name="awayTeam" required>
+              <option value="">Selecione o visitante</option>
+              <% teams.forEach((team) => { %>
+                <option value="<%= team.name %>" data-championship="<%= team.championship %>" data-crest="<%= teamCrestUrl(team.name) %>"><%= team.name %></option>
+              <% }) %>
+            </select>
+          </span>
+        </label>
         <label>Data <input type="date" name="matchDate" required></label>
         <label>Horario <input type="time" name="matchTime" required></label>
         <label>Local <input name="venue"></label>
@@ -37,18 +57,31 @@
     </form>
     <div class="table-panel">
       <table>
-        <thead><tr><th>Bolao</th><th>Campeonato</th><th>Jogo</th><th>Data</th><th>Status</th></tr></thead>
+        <thead><tr><th>Bolao</th><th>Campeonato</th><th>Jogo</th><th>Data</th><th>Status</th><th>Acoes</th></tr></thead>
         <tbody>
           <% if (!matches.length) { %>
-            <tr><td colspan="5">Nenhum jogo cadastrado.</td></tr>
+            <tr><td colspan="6">Nenhum jogo cadastrado.</td></tr>
           <% } %>
           <% matches.forEach((match) => { %>
             <tr>
               <td><%= match.poolName %></td>
               <td><%= match.championship %></td>
-              <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong></td>
+              <td>
+                <span class="admin-match-teams">
+                  <strong><%= match.homeTeam %></strong>
+                  <img class="crest-img" src="<%= teamCrestUrl(match.homeTeam) %>" alt="">
+                  <span>x</span>
+                  <img class="crest-img" src="<%= teamCrestUrl(match.awayTeam) %>" alt="">
+                  <strong><%= match.awayTeam %></strong>
+                </span>
+              </td>
               <td><%= match.matchDate %> <%= match.matchTime %></td>
               <td><span class="badge"><%= labelForStatus(match.status) %></span></td>
+              <td>
+                <form class="inline-form" action="/admin/jogos/<%= match.id %>/excluir" method="post" onsubmit="return confirm('Excluir este jogo? Os palpites desse jogo tambem serao removidos.');">
+                  <button class="button danger small" type="submit">Excluir</button>
+                </form>
+              </td>
             </tr>
           <% }) %>
         </tbody>
@@ -56,4 +89,35 @@
     </div>
   </div>
 </section>
+<script>
+  (() => {
+    const championship = document.querySelector('select[name="championship"]');
+    const teamSelects = [...document.querySelectorAll('select[name="homeTeam"], select[name="awayTeam"]')];
+
+    function updatePreview(select) {
+      const option = select.selectedOptions[0];
+      const preview = document.querySelector(`[data-team-preview="${select.name}"]`);
+      if (!preview || !option?.dataset.crest) return;
+      preview.src = option.dataset.crest;
+      preview.alt = `Brasao ${option.value}`;
+    }
+
+    function filterTeams() {
+      const selectedChampionship = championship?.value || "";
+      teamSelects.forEach((select) => {
+        [...select.options].forEach((option) => {
+          if (!option.value) return;
+          option.hidden = Boolean(selectedChampionship) && option.dataset.championship !== selectedChampionship;
+        });
+        const selected = select.selectedOptions[0];
+        if (selected?.hidden) select.value = "";
+        updatePreview(select);
+      });
+    }
+
+    championship?.addEventListener("change", filterTeams);
+    teamSelects.forEach((select) => select.addEventListener("change", () => updatePreview(select)));
+    filterTeams();
+  })();
+</script>
 <%- include("../partials/footer") %>

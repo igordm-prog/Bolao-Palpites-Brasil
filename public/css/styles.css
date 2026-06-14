@@ -606,6 +606,36 @@ select {
   border-radius: 8px;
 }
 
+.team-select-field {
+  min-width: 0;
+}
+
+.team-select-control {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.team-select-crest {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
+}
+
+.admin-match-teams {
+  display: inline-grid;
+  grid-template-columns: minmax(90px, 1fr) 30px 18px 30px minmax(90px, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: min(360px, 100%);
+}
+
+.admin-match-teams strong:first-child {
+  text-align: right;
+}
+
 .check {
   grid-template-columns: auto 1fr !important;
   align-items: center;

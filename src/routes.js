@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
+const { championships, isKnownTeam, teamColors, teams } = require("./teams");
 const {
   hashCpf,
   isAdult,
@@ -18,42 +19,7 @@ const {
   todayIso
 } = require("./utils");
 
-const championships = ["Serie A", "Serie B", "Serie C", "Serie D"];
 const paymentStatuses = ["awaiting", "paid", "canceled", "refunded", "expired"];
-const teamColors = {
-  Flamengo: ["#d71920", "#111111"],
-  Palmeiras: ["#006437", "#ffffff"],
-  Corinthians: ["#f2f2f2", "#111111"],
-  Gremio: ["#00a7e1", "#111111"],
-  "Atletico Mineiro": ["#111111", "#ffffff"],
-  "Sao Paulo": ["#ffffff", "#d71920"],
-  Internacional: ["#d71920", "#ffffff"],
-  Cruzeiro: ["#1c5fb8", "#ffffff"],
-  Botafogo: ["#111111", "#ffffff"],
-  Bahia: ["#0057b8", "#d71920"],
-  Vasco: ["#111111", "#ffffff"],
-  "Athletico-PR": ["#d71920", "#111111"],
-  Ceara: ["#111111", "#ffffff"],
-  Sport: ["#d71920", "#f6c13a"],
-  Goias: ["#008c45", "#ffffff"],
-  Coritiba: ["#007a3d", "#ffffff"],
-  Novorizontino: ["#f6c13a", "#111111"],
-  "Vila Nova": ["#d71920", "#ffffff"],
-  Avai: ["#1f73d8", "#ffffff"],
-  Chapecoense: ["#1b8f3a", "#ffffff"],
-  CRB: ["#d71920", "#ffffff"],
-  Amazonas: ["#f6c13a", "#111111"],
-  Mirassol: ["#f6c13a", "#16803c"],
-  "Ponte Preta": ["#111111", "#ffffff"],
-  Operario: ["#111111", "#ffffff"],
-  Ituano: ["#d71920", "#111111"],
-  Brusque: ["#f6c13a", "#d71920"],
-  "Sampaio Correa": ["#f6c13a", "#16803c"],
-  Juventude: ["#16803c", "#ffffff"],
-  Londrina: ["#7dd3fc", "#ffffff"],
-  Guarani: ["#16803c", "#ffffff"],
-  Tombense: ["#d71920", "#ffffff"]
-};
 
 function initialsForTeam(name) {
   return String(name || "FC")
@@ -936,12 +902,26 @@ function router(store) {
     }
     const matches = data.matches.filter((match) => match.poolId === poolId);
     matches.forEach((match) => {
-      const homeScore = Number(req.body[`home_${match.id}`]);
-      const awayScore = Number(req.body[`away_${match.id}`]);
-      if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore) || homeScore < 0 || awayScore < 0) return;
+      const rawHomeScore = String(req.body[`home_${match.id}`] ?? "").trim();
+      const rawAwayScore = String(req.body[`away_${match.id}`] ?? "").trim();
       const existing = data.guesses.find(
         (guess) => guess.poolId === poolId && guess.matchId === match.id && guess.userId === user.id
       );
+      if (!rawHomeScore && !rawAwayScore) {
+        if (existing) {
+          existing.homeScore = null;
+          existing.awayScore = null;
+          existing.points = 0;
+          existing.category = "pending";
+          existing.updatedAt = todayIso();
+          existing.ip = req.ip;
+        }
+        return;
+      }
+      if (!rawHomeScore || !rawAwayScore) return;
+      const homeScore = Number(rawHomeScore);
+      const awayScore = Number(rawAwayScore);
+      if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore) || homeScore < 0 || awayScore < 0) return;
       const before = existing ? { homeScore: existing.homeScore, awayScore: existing.awayScore } : null;
       if (existing) {
         existing.homeScore = homeScore;
@@ -1033,6 +1013,109 @@ function router(store) {
     res.redirect("/admin/boloes");
   });
 
+  app.post("/admin/boloes/:id/excluir", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const admin = getCurrentUser(data, req);
+    const poolId = Number(req.params.id);
+    const pool = data.pools.find((item) => item.id === poolId);
+    if (!pool) {
+      req.flash("error", "Bolao nao encontrado.");
+      return res.redirect("/admin/boloes");
+    }
+
+    const paidParticipations = data.participations.filter(
+      (participation) => participation.poolId === poolId && participation.status === "paid"
+    );
+
+    if (!paidParticipations.length) {
+      const before = { ...pool };
+      const matchIds = new Set(data.matches.filter((match) => match.poolId === poolId).map((match) => match.id));
+      data.pools = data.pools.filter((item) => item.id !== poolId);
+      data.matches = data.matches.filter((match) => match.poolId !== poolId);
+      data.guesses = data.guesses.filter((guess) => guess.poolId !== poolId && !matchIds.has(guess.matchId));
+      data.participations = data.participations.filter((participation) => participation.poolId !== poolId);
+      data.payments = data.payments.filter((payment) => payment.poolId !== poolId);
+      audit(data, admin.id, "pool.deleted", "pools", before, null, req);
+      store.write(data);
+      req.flash("success", "Bolao excluido.");
+      return res.redirect("/admin/boloes");
+    }
+
+    if (pool.status === "canceled") {
+      req.flash("error", "Este bolao ja esta cancelado.");
+      return res.redirect("/admin/boloes");
+    }
+
+    const beforePool = { status: pool.status, canceledAt: pool.canceledAt };
+    pool.status = "canceled";
+    pool.canceledAt = todayIso();
+
+    let refundedCount = 0;
+    let refundedAmount = 0;
+    paidParticipations.forEach((participation) => {
+      const user = data.users.find((item) => item.id === participation.userId);
+      const entryPayment = data.payments.find(
+        (payment) => payment.type === "pool_entry" && payment.participationId === participation.id
+      );
+      const amount = Number(entryPayment?.amount || pool.entryValue || 0);
+      if (!user || amount <= 0) return;
+
+      const beforeBalance = Number(user.walletBalance || 0);
+      user.walletBalance = beforeBalance + amount;
+      participation.status = "refunded";
+      participation.refundedAt = todayIso();
+
+      if (entryPayment) {
+        entryPayment.status = "refunded";
+        entryPayment.refundedAt = todayIso();
+        entryPayment.updatedAt = todayIso();
+      }
+
+      const refundPayment = {
+        id: store.nextId(data, "payments"),
+        type: "pool_refund",
+        method: "WALLET",
+        userId: user.id,
+        poolId,
+        participationId: participation.id,
+        amount,
+        status: "paid",
+        qrCode: null,
+        pixPayload: null,
+        transactionId: `REFUND-${user.id}-${poolId}-${Date.now()}`,
+        confirmedAt: todayIso(),
+        creditedAt: todayIso(),
+        createdAt: todayIso()
+      };
+      data.payments.push(refundPayment);
+      refundedCount += 1;
+      refundedAmount += amount;
+      audit(
+        data,
+        admin.id,
+        "wallet.pool_entry_refunded",
+        "users",
+        { id: user.id, walletBalance: beforeBalance },
+        { id: user.id, walletBalance: user.walletBalance, poolId, paymentId: refundPayment.id },
+        req
+      );
+    });
+
+    audit(
+      data,
+      admin.id,
+      "pool.canceled",
+      "pools",
+      beforePool,
+      { status: pool.status, canceledAt: pool.canceledAt, refundedCount, refundedAmount },
+      req
+    );
+    store.write(data);
+    req.flash("success", `Bolao cancelado. ${refundedCount} participacao(oes) devolvida(s) para a carteira.`);
+    return res.redirect("/admin/boloes");
+  });
+
   app.get("/admin/jogos", requireAuth, requireAdmin, (req, res) => {
     const data = store.read();
     normalizeData(data);
@@ -1043,7 +1126,8 @@ function router(store) {
         ...match,
         poolName: data.pools.find((pool) => pool.id === match.poolId)?.name || "-"
       })),
-      championships
+      championships,
+      teams
     });
   });
 
@@ -1052,8 +1136,22 @@ function router(store) {
     normalizeData(data);
     const user = getCurrentUser(data, req);
     const poolId = Number(req.body.poolId);
+    const homeTeam = String(req.body.homeTeam || "").trim();
+    const awayTeam = String(req.body.awayTeam || "").trim();
+    const homeTeamMeta = teams.find((team) => team.name === homeTeam);
+    const awayTeamMeta = teams.find((team) => team.name === awayTeam);
     if (!data.pools.some((pool) => pool.id === poolId) || !championships.includes(req.body.championship)) {
       req.flash("error", "Bolao ou campeonato invalido.");
+      return res.redirect("/admin/jogos");
+    }
+    if (
+      !isKnownTeam(homeTeam) ||
+      !isKnownTeam(awayTeam) ||
+      homeTeam === awayTeam ||
+      homeTeamMeta?.championship !== req.body.championship ||
+      awayTeamMeta?.championship !== req.body.championship
+    ) {
+      req.flash("error", "Selecione mandante e visitante validos e diferentes.");
       return res.redirect("/admin/jogos");
     }
     if (!isWeekend(req.body.matchDate)) {
@@ -1065,8 +1163,8 @@ function router(store) {
       poolId,
       championship: req.body.championship,
       round: String(req.body.round || "").trim(),
-      homeTeam: String(req.body.homeTeam || "").trim(),
-      awayTeam: String(req.body.awayTeam || "").trim(),
+      homeTeam,
+      awayTeam,
       matchDate: req.body.matchDate,
       matchTime: req.body.matchTime,
       venue: String(req.body.venue || "").trim(),
@@ -1084,6 +1182,26 @@ function router(store) {
     store.write(data);
     req.flash("success", "Jogo cadastrado.");
     res.redirect("/admin/jogos");
+  });
+
+  app.post("/admin/jogos/:id/excluir", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const matchId = Number(req.params.id);
+    const match = data.matches.find((item) => item.id === matchId);
+    if (!match) {
+      req.flash("error", "Jogo nao encontrado.");
+      return res.redirect("/admin/jogos");
+    }
+    const before = { ...match };
+    data.matches = data.matches.filter((item) => item.id !== matchId);
+    data.guesses = data.guesses.filter((guess) => guess.matchId !== matchId);
+    recalculatePool(data, match.poolId);
+    audit(data, user.id, "match.deleted", "matches", before, null, req);
+    store.write(data);
+    req.flash("success", "Jogo excluido.");
+    return res.redirect("/admin/jogos");
   });
 
   app.get("/admin/pagamentos", requireAuth, requireAdmin, (req, res) => {

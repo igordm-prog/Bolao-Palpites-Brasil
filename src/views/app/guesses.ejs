@@ -81,13 +81,13 @@
             <span class="match-date"><%= day %> <%= match.matchDate.slice(8, 10) %>/<%= match.matchDate.slice(5, 7) %></span>
             <span class="match-time"><%= match.matchTime %></span>
             <span class="team home-team">
-              <img class="crest-img" src="<%= teamCrestUrl(match.homeTeam) %>" alt="Brasao <%= match.homeTeam %>">
               <strong><%= match.homeTeam %></strong>
+              <img class="crest-img" src="<%= teamCrestUrl(match.homeTeam) %>" alt="Brasao <%= match.homeTeam %>">
             </span>
             <span class="pick-inputs">
-              <input type="number" min="0" name="home_<%= match.id %>" value="<%= guess.homeScore ?? 0 %>" <%= locked ? "disabled" : "" %>>
+              <input type="number" min="0" name="home_<%= match.id %>" value="<%= guess.homeScore ?? "" %>" placeholder="-" <%= locked ? "disabled" : "" %>>
               <span>x</span>
-              <input type="number" min="0" name="away_<%= match.id %>" value="<%= guess.awayScore ?? 0 %>" <%= locked ? "disabled" : "" %>>
+              <input type="number" min="0" name="away_<%= match.id %>" value="<%= guess.awayScore ?? "" %>" placeholder="-" <%= locked ? "disabled" : "" %>>
             </span>
             <span class="team away-team">
               <img class="crest-img" src="<%= teamCrestUrl(match.awayTeam) %>" alt="Brasao <%= match.awayTeam %>">

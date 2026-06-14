@@ -80,6 +80,11 @@
           <% if (isAdmin) { %>
             <a class="button full" href="/app/boloes/<%= pool.id %>/palpites">Abrir jogos</a>
             <a class="button secondary full" href="/app/boloes/<%= pool.id %>/ranking">Ranking</a>
+          <% } else if (pool.status !== "open") { %>
+            <span class="badge <%= pool.status %>"><%= labelForStatus(pool.status) %></span>
+            <% if (participation?.status === "refunded") { %>
+              <small class="muted">Entrada devolvida para sua carteira.</small>
+            <% } %>
           <% } else if (!participation) { %>
             <% if (Number(user.walletBalance || 0) >= Number(pool.entryValue || 0)) { %>
               <form action="/app/boloes/<%= pool.id %>/participar" method="post">

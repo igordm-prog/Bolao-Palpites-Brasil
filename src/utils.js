@@ -89,6 +89,7 @@ function labelForPaymentType(type) {
   const labels = {
     deposit: "Deposito",
     pool_entry: "Entrada em bolao",
+    pool_refund: "Devolucao de bolao",
     withdrawal: "Saque"
   };
   return labels[type] || type || "-";
@@ -120,7 +121,10 @@ function labelForAuditAction(action) {
     "user.registered": "Usuario cadastrado",
     "user.status_changed": "Status do usuario alterado",
     "pool.created": "Bolao criado",
+    "pool.canceled": "Bolao cancelado",
+    "pool.deleted": "Bolao excluido",
     "match.created": "Jogo cadastrado",
+    "match.deleted": "Jogo excluido",
     "match.result_entered": "Resultado lancado",
     "payment.created": "Pagamento criado",
     "payment.status_changed": "Status do pagamento alterado",
@@ -129,6 +133,7 @@ function labelForAuditAction(action) {
     "wallet.deposit_reversed": "Deposito estornado",
     "wallet.pool_entry_debited": "Entrada debitada da carteira",
     "wallet.pending_entry_debited": "Entrada pendente debitada",
+    "wallet.pool_entry_refunded": "Entrada devolvida para carteira",
     "wallet.withdrawal_requested": "Saque solicitado",
     "wallet.withdrawal_paid": "Saque pago",
     "wallet.withdrawal_canceled": "Saque cancelado",
