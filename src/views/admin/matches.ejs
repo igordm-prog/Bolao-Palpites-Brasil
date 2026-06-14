@@ -26,7 +26,7 @@
         <label>Rodada <input name="round"></label>
         <label class="team-select-field">Mandante
           <span class="team-select-control">
-            <img class="team-select-crest" data-team-preview="homeTeam" src="<%= teamCrestUrl(teams[0]?.name || "Time") %>" alt="">
+            <img class="team-select-crest" data-team-preview="homeTeam" alt="" hidden>
             <select name="homeTeam" required>
               <option value="">Selecione o mandante</option>
               <% teams.forEach((team) => { %>
@@ -37,7 +37,7 @@
         </label>
         <label class="team-select-field">Visitante
           <span class="team-select-control">
-            <img class="team-select-crest" data-team-preview="awayTeam" src="<%= teamCrestUrl(teams[1]?.name || "Time") %>" alt="">
+            <img class="team-select-crest" data-team-preview="awayTeam" alt="" hidden>
             <select name="awayTeam" required>
               <option value="">Selecione o visitante</option>
               <% teams.forEach((team) => { %>

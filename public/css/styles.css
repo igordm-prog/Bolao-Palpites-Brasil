@@ -611,13 +611,20 @@ select {
 }
 
 .team-select-control {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.team-select-control select {
+  flex: 1;
+  min-width: 0;
 }
 
 .team-select-crest {
+  flex: 0 0 34px;
   width: 34px;
   height: 34px;
   object-fit: contain;
