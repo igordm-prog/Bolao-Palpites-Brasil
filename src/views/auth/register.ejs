@@ -1,29 +1,35 @@
 <%- include("../partials/head", { title }) %>
 <section class="auth-shell wide">
-  <form class="panel form" action="/cadastro" method="post">
+  <form class="panel form" action="/cadastro" method="post" novalidate>
     <h1>Criar conta</h1>
     <div class="form-grid">
       <label>Nome completo
-        <input name="name" autocomplete="name" minlength="6" maxlength="120" placeholder="Nome e sobrenome" required>
+        <input name="name" autocomplete="name" minlength="6" maxlength="120" placeholder="Nome e sobrenome" aria-describedby="name-error" required>
+        <small class="field-error" id="name-error">Informe nome e sobrenome validos, sem numeros ou simbolos.</small>
       </label>
       <label>CPF
-        <input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" maxlength="14" required>
+        <input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" aria-describedby="cpf-error" required>
+        <small class="field-error" id="cpf-error">Informe um CPF valido.</small>
       </label>
       <label>Data de nascimento
-        <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" aria-describedby="birthDate-error" required>
+        <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" maxlength="10" aria-describedby="birthDate-error" required>
         <small class="field-error" id="birthDate-error">Informe uma data de nascimento valida no formato dd/mm/aaaa.</small>
       </label>
       <label>E-mail
-        <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" maxlength="254" required>
+        <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" maxlength="254" aria-describedby="email-error" required>
+        <small class="field-error" id="email-error">Informe um e-mail valido.</small>
       </label>
       <label>Telefone/WhatsApp
-        <input name="phone" autocomplete="tel" required>
+        <input name="phone" inputmode="numeric" autocomplete="tel" placeholder="(00) 00000-0000" maxlength="15" aria-describedby="phone-error" required>
+        <small class="field-error" id="phone-error">Informe um telefone/WhatsApp valido com DDD.</small>
       </label>
       <label>Senha
-        <input type="password" name="password" autocomplete="new-password" required>
+        <input type="password" name="password" autocomplete="new-password" aria-describedby="password-error" required>
+        <small class="field-error" id="password-error">Use no minimo 8 caracteres, com maiuscula, minuscula, numero e simbolo.</small>
       </label>
       <label>Confirmar senha
-        <input type="password" name="confirmPassword" autocomplete="new-password" required>
+        <input type="password" name="confirmPassword" autocomplete="new-password" aria-describedby="confirmPassword-error" required>
+        <small class="field-error" id="confirmPassword-error">A confirmacao precisa ser igual a senha.</small>
       </label>
     </div>
     <label class="check"><input type="checkbox" name="acceptedTerms" required> Aceito os Termos de Uso</label>
@@ -35,12 +41,39 @@
 <script>
   (() => {
     const form = document.querySelector('form[action="/cadastro"]');
-    const name = document.querySelector('input[name="name"]');
-    const cpf = document.querySelector('input[name="cpf"]');
-    const birthDate = document.querySelector('input[name="birthDate"]');
+    const fields = {
+      name: document.querySelector('input[name="name"]'),
+      cpf: document.querySelector('input[name="cpf"]'),
+      birthDate: document.querySelector('input[name="birthDate"]'),
+      email: document.querySelector('input[name="email"]'),
+      phone: document.querySelector('input[name="phone"]'),
+      password: document.querySelector('input[name="password"]'),
+      confirmPassword: document.querySelector('input[name="confirmPassword"]')
+    };
+
+    function onlyDigits(value) {
+      return value.replace(/\D/g, "");
+    }
+
+    function setFieldState(input, valid, message, force = false) {
+      if (!input) return true;
+      const hasValue = input.value.trim().length > 0;
+      const showError = force || hasValue ? !valid : false;
+      input.classList.toggle("is-invalid", showError);
+      input.setAttribute("aria-invalid", showError ? "true" : "false");
+      input.setCustomValidity(showError ? message : "");
+      return !showError;
+    }
+
+    function isValidName(value) {
+      const normalized = value.trim().replace(/\s+/g, " ");
+      if (normalized.length < 6 || normalized.length > 120) return false;
+      if (/\d|[<>{}[\]()/\\|_=+*@#$%^&;:!?]/.test(normalized)) return false;
+      return normalized.split(" ").every((part) => /^[\p{L}'.-]{2,}$/u.test(part)) && normalized.split(" ").length >= 2;
+    }
 
     function isValidCpf(value) {
-      const digits = value.replace(/\D/g, "");
+      const digits = onlyDigits(value);
       if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) return false;
       const calc = (length) => {
         let sum = 0;
@@ -53,22 +86,6 @@
       return calc(9) === Number(digits[9]) && calc(10) === Number(digits[10]);
     }
 
-    function maskCpf() {
-      if (!cpf) return;
-      const digits = cpf.value.replace(/\D/g, "").slice(0, 11);
-      cpf.value = digits
-        .replace(/^(\d{3})(\d)/, "$1.$2")
-        .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
-        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
-    }
-
-    function isValidName(value) {
-      const normalized = value.trim().replace(/\s+/g, " ");
-      if (normalized.length < 6) return false;
-      if (/\d|[<>{}[\]()/\\|_=+*@#$%^&;:!?]/.test(normalized)) return false;
-      return normalized.split(" ").filter(Boolean).length >= 2;
-    }
-
     function isValidBirthDate(value) {
       const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
       if (!match) return false;
@@ -77,45 +94,114 @@
       return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
     }
 
-    function updateBirthDateState() {
-      if (!birthDate) return true;
-      const hasValue = birthDate.value.trim().length > 0;
-      const isComplete = birthDate.value.length === 10;
-      const valid = hasValue && isComplete && isValidBirthDate(birthDate.value);
-      const shouldShowError = hasValue && (!isComplete || !valid);
-
-      birthDate.classList.toggle("is-invalid", shouldShowError);
-      birthDate.setAttribute("aria-invalid", shouldShowError ? "true" : "false");
-      birthDate.setCustomValidity(shouldShowError ? "Informe uma data de nascimento valida no formato dd/mm/aaaa." : "");
-      return !shouldShowError;
+    function isValidEmail(value) {
+      const normalized = value.trim().toLowerCase();
+      return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized) && normalized.length <= 254;
     }
 
-    cpf?.addEventListener("input", maskCpf);
+    function isValidPhone(value) {
+      const digits = onlyDigits(value);
+      if (![10, 11].includes(digits.length) || /^(\d)\1+$/.test(digits)) return false;
+      const areaCode = Number(digits.slice(0, 2));
+      if (areaCode < 11 || areaCode > 99) return false;
+      return digits.length === 10 || digits[2] === "9";
+    }
 
-    birthDate?.addEventListener("input", () => {
-      const digits = birthDate.value.replace(/\D/g, "").slice(0, 8);
-      const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
-      birthDate.value = parts.join("/");
-      updateBirthDateState();
-    });
-    birthDate?.addEventListener("blur", updateBirthDateState);
+    function isStrongPassword(value) {
+      return value.length >= 8 && /[A-Z]/.test(value) && /[a-z]/.test(value) && /\d/.test(value) && /[^A-Za-z0-9]/.test(value);
+    }
+
+    function maskCpf() {
+      const input = fields.cpf;
+      if (!input) return;
+      const digits = onlyDigits(input.value).slice(0, 11);
+      input.value = digits
+        .replace(/^(\d{3})(\d)/, "$1.$2")
+        .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+    }
+
+    function maskBirthDate() {
+      const input = fields.birthDate;
+      if (!input) return;
+      const digits = onlyDigits(input.value).slice(0, 8);
+      input.value = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join("/");
+    }
+
+    function maskPhone() {
+      const input = fields.phone;
+      if (!input) return;
+      const digits = onlyDigits(input.value).slice(0, 11);
+      if (digits.length <= 2) {
+        input.value = digits;
+      } else if (digits.length <= 6) {
+        input.value = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+      } else if (digits.length <= 10) {
+        input.value = `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+      } else {
+        input.value = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+      }
+    }
+
+    function validateName(force = false) {
+      return setFieldState(fields.name, isValidName(fields.name?.value || ""), "Informe nome e sobrenome validos, sem numeros ou simbolos.", force);
+    }
+
+    function validateCpf(force = false) {
+      return setFieldState(fields.cpf, isValidCpf(fields.cpf?.value || ""), "Informe um CPF valido.", force);
+    }
+
+    function validateBirthDate(force = false) {
+      return setFieldState(fields.birthDate, isValidBirthDate(fields.birthDate?.value || ""), "Informe uma data de nascimento valida no formato dd/mm/aaaa.", force);
+    }
+
+    function validateEmail(force = false) {
+      return setFieldState(fields.email, isValidEmail(fields.email?.value || ""), "Informe um e-mail valido.", force);
+    }
+
+    function validatePhone(force = false) {
+      return setFieldState(fields.phone, isValidPhone(fields.phone?.value || ""), "Informe um telefone/WhatsApp valido com DDD.", force);
+    }
+
+    function validatePassword(force = false) {
+      const ok = setFieldState(fields.password, isStrongPassword(fields.password?.value || ""), "Use no minimo 8 caracteres, com maiuscula, minuscula, numero e simbolo.", force);
+      validateConfirmPassword(force && Boolean(fields.confirmPassword?.value));
+      return ok;
+    }
+
+    function validateConfirmPassword(force = false) {
+      const password = fields.password?.value || "";
+      const confirmation = fields.confirmPassword?.value || "";
+      return setFieldState(fields.confirmPassword, confirmation.length > 0 && confirmation === password, "A confirmacao precisa ser igual a senha.", force);
+    }
+
+    fields.name?.addEventListener("input", () => validateName());
+    fields.name?.addEventListener("blur", () => validateName(true));
+    fields.cpf?.addEventListener("input", () => { maskCpf(); validateCpf(); });
+    fields.cpf?.addEventListener("blur", () => validateCpf(true));
+    fields.birthDate?.addEventListener("input", () => { maskBirthDate(); validateBirthDate(); });
+    fields.birthDate?.addEventListener("blur", () => validateBirthDate(true));
+    fields.email?.addEventListener("input", () => validateEmail());
+    fields.email?.addEventListener("blur", () => validateEmail(true));
+    fields.phone?.addEventListener("input", () => { maskPhone(); validatePhone(); });
+    fields.phone?.addEventListener("blur", () => validatePhone(true));
+    fields.password?.addEventListener("input", () => validatePassword());
+    fields.password?.addEventListener("blur", () => validatePassword(true));
+    fields.confirmPassword?.addEventListener("input", () => validateConfirmPassword());
+    fields.confirmPassword?.addEventListener("blur", () => validateConfirmPassword(true));
 
     form?.addEventListener("submit", (event) => {
-      name?.setCustomValidity("");
-      cpf?.setCustomValidity("");
-      const birthDateOk = updateBirthDateState();
+      const valid = [
+        validateName(true),
+        validateCpf(true),
+        validateBirthDate(true),
+        validateEmail(true),
+        validatePhone(true),
+        validatePassword(true),
+        validateConfirmPassword(true)
+      ].every(Boolean);
 
-      if (name && !isValidName(name.value)) {
-        name.setCustomValidity("Informe nome e sobrenome validos, sem numeros ou simbolos.");
-      }
-      if (cpf && !isValidCpf(cpf.value)) {
-        cpf.setCustomValidity("Informe um CPF valido.");
-      }
-      if (birthDate && birthDateOk && !isValidBirthDate(birthDate.value)) {
-        birthDate.setCustomValidity("Digite uma data valida no formato dd/mm/aaaa.");
-      }
-
-      if (!form.checkValidity()) {
+      if (!valid || !form.checkValidity()) {
         event.preventDefault();
         form.reportValidity();
       }

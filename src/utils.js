@@ -55,6 +55,15 @@ function isValidFullName(name = "") {
   return parts.every((part) => /^[A-Za-zÀ-ÖØ-öø-ÿ'.-]{2,}$/.test(part));
 }
 
+function isValidPhone(phone = "") {
+  const digits = onlyDigits(phone);
+  if (![10, 11].includes(digits.length) || /^(\d)\1+$/.test(digits)) return false;
+  const areaCode = Number(digits.slice(0, 2));
+  if (areaCode < 11 || areaCode > 99) return false;
+  if (digits.length === 11 && digits[2] !== "9") return false;
+  return true;
+}
+
 function isValidCpf(cpf) {
   const digits = onlyDigits(cpf);
   if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) return false;
@@ -232,6 +241,7 @@ module.exports = {
   maskCpf,
   isValidEmail,
   isValidFullName,
+  isValidPhone,
   isValidCpf,
   isAdult,
   strongPassword,

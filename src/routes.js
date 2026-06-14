@@ -13,6 +13,7 @@ const {
   isValidCpf,
   isValidEmail,
   isValidFullName,
+  isValidPhone,
   isWeekend,
   maskCpf,
   normalizeBirthDate,
@@ -310,6 +311,7 @@ function router(store) {
     if (birthDate && !normalizedBirthDate) errors.push("Data de nascimento invalida. Use o formato dd/mm/aaaa.");
     if (!isValidFullName(normalizedName)) errors.push("Informe nome e sobrenome validos, sem numeros ou simbolos.");
     if (!isValidEmail(normalizedEmail)) errors.push("E-mail invalido.");
+    if (!isValidPhone(normalizedPhone)) errors.push("Telefone/WhatsApp invalido.");
     if (!isValidCpf(normalizedCpf)) errors.push("CPF invalido.");
     if (!isAdult(normalizedBirthDate) || adultConfirmation !== "on") errors.push("E necessario confirmar maioridade.");
     if (!strongPassword(password)) {
