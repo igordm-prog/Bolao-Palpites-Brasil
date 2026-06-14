@@ -5,6 +5,9 @@
   const fillPercent = matches.length ? Math.round((filled / matches.length) * 100) : 0;
   const currentRank = ranking.find((row) => row.userId === currentUser.id);
   const championshipOptions = [...new Set(matches.map((match) => match.championship))];
+  const saturdayCount = matches.filter((match) => new Date(`${match.matchDate}T12:00:00`).getDay() === 6).length;
+  const sundayCount = matches.filter((match) => new Date(`${match.matchDate}T12:00:00`).getDay() === 0).length;
+  const initialDayFilter = saturdayCount ? "saturday" : sundayCount ? "sunday" : "all";
   const displayUserName = currentUser.name;
   const displayFilled = filled;
   const displayPending = pending;
@@ -24,8 +27,8 @@
     </div>
     <div class="countdown-panel">
       <span>Fechamento dos palpites em</span>
-      <strong data-deadline="<%= pool.deadlineAt %>">01 : 23 : 45 : 12</strong>
-      <small>Dias&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Horas&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Min&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seg</small>
+      <strong data-countdown data-deadline="<%= pool.deadlineAt %>">-- : -- : -- : --</strong>
+      <small><span>Dias</span><span>Horas</span><span>Min</span><span>Seg</span></small>
     </div>
     <% if (!locked) { %>
       <button class="button save-picks" form="guesses-form" type="submit">Salvar palpites</button>
@@ -56,9 +59,9 @@
             <option value="<%= championship %>"><%= championship %></option>
           <% }) %>
         </select>
-        <div class="day-tabs" aria-label="Dias dos jogos">
-          <button class="active" type="button" data-day-filter="saturday">Sabado (<%= matches.filter((match) => new Date(`${match.matchDate}T12:00:00`).getDay() === 6).length %>)</button>
-          <button type="button" data-day-filter="sunday">Domingo (<%= matches.filter((match) => new Date(`${match.matchDate}T12:00:00`).getDay() === 0).length %>)</button>
+        <div class="day-tabs" aria-label="Dias dos jogos" data-initial-day="<%= initialDayFilter %>">
+          <button class="<%= initialDayFilter === "saturday" ? "active" : "" %>" type="button" data-day-filter="saturday">Sabado (<%= saturdayCount %>)</button>
+          <button class="<%= initialDayFilter === "sunday" ? "active" : "" %>" type="button" data-day-filter="sunday">Domingo (<%= sundayCount %>)</button>
         </div>
         <label class="search-box">
           <input id="match-search" type="search" aria-label="Buscar jogo ou time" placeholder="Buscar jogo ou time...">
@@ -173,10 +176,55 @@
   (() => {
     const rows = [...document.querySelectorAll(".match-row")];
     const dayButtons = [...document.querySelectorAll("[data-day-filter]")];
+    const dayTabs = document.querySelector(".day-tabs");
     const championship = document.querySelector("#championship-filter");
     const search = document.querySelector("#match-search");
     const empty = document.querySelector(".empty-matches");
-    let selectedDay = "all";
+    const countdown = document.querySelector("[data-countdown]");
+    const saveButton = document.querySelector(".save-picks");
+    let selectedDay = dayTabs?.dataset.initialDay || "all";
+
+    function formatCountdownPart(value) {
+      return String(Math.max(0, value)).padStart(2, "0");
+    }
+
+    function updateCountdown() {
+      if (!countdown) return;
+
+      const deadline = new Date(countdown.dataset.deadline);
+      const diff = deadline.getTime() - Date.now();
+
+      if (Number.isNaN(deadline.getTime())) {
+        countdown.textContent = "-- : -- : -- : --";
+        return;
+      }
+
+      if (diff <= 0) {
+        countdown.textContent = "Encerrado";
+        countdown.closest(".countdown-panel")?.classList.add("is-closed");
+        saveButton?.setAttribute("disabled", "disabled");
+        document.querySelectorAll(".pick-inputs input").forEach((input) => {
+          input.setAttribute("disabled", "disabled");
+        });
+        document.querySelectorAll(".pick-status").forEach((status) => {
+          status.textContent = "Palpite fechado";
+        });
+        return;
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      countdown.textContent = [
+        formatCountdownPart(days),
+        formatCountdownPart(hours),
+        formatCountdownPart(minutes),
+        formatCountdownPart(seconds)
+      ].join(" : ");
+    }
 
     function applyFilters() {
       const selectedChampionship = championship?.value || "all";
@@ -207,6 +255,8 @@
     ["input", "change", "search", "keyup"].forEach((eventName) => {
       search?.addEventListener(eventName, applyFilters);
     });
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
     applyFilters();
   })();
 </script>

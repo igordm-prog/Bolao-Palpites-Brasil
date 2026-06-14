@@ -1386,13 +1386,13 @@ th {
 
 .countdown-panel {
   display: grid;
-  grid-template-columns: 94px minmax(0, 1fr);
+  grid-template-columns: 104px minmax(148px, 1fr);
   grid-template-areas:
     "label time"
     "label units";
-  flex: 0 0 238px;
+  flex: 0 0 286px;
   align-items: center;
-  gap: 2px 12px;
+  gap: 3px 14px;
   text-align: center;
 }
 
@@ -1405,15 +1405,35 @@ th {
 .countdown-panel strong {
   grid-area: time;
   color: var(--green);
-  font-size: 1.08rem;
-  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.02rem;
+  letter-spacing: 0.04em;
   line-height: 1;
   white-space: nowrap;
 }
 
 .countdown-panel small {
   grid-area: units;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   white-space: nowrap;
+}
+
+.countdown-panel.is-closed {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "label"
+    "time";
+}
+
+.countdown-panel.is-closed strong {
+  color: var(--yellow);
+  letter-spacing: 0;
+}
+
+.countdown-panel.is-closed small {
+  display: none;
 }
 
 .save-picks {
@@ -1565,10 +1585,10 @@ th {
 
 .match-row {
   display: grid;
-  grid-template-columns: 52px 70px 77px 72px minmax(145px, 1fr) 112px minmax(170px, 1.12fr) 154px 34px;
+  grid-template-columns: 34px 72px 70px 54px minmax(142px, 1fr) 102px minmax(142px, 1fr) 126px 28px;
   align-items: center;
-  column-gap: 0;
-  min-height: 40px;
+  column-gap: 8px;
+  min-height: 44px;
   width: 100%;
   overflow: hidden;
   color: #eef2f3;
@@ -1596,6 +1616,7 @@ th {
   color: var(--green);
   font-weight: 900;
   font-size: 0.75rem;
+  white-space: nowrap;
 }
 
 .league-pill.serie-b {
@@ -1612,7 +1633,7 @@ th {
 .team {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -1624,8 +1645,8 @@ th {
 }
 
 .home-team {
-  justify-content: flex-start;
-  text-align: left;
+  justify-content: flex-end;
+  text-align: right;
 }
 
 .away-team {
@@ -1669,8 +1690,8 @@ th {
 
 .pick-inputs {
   display: grid;
-  grid-template-columns: 48px 16px 48px;
-  gap: 0;
+  grid-template-columns: 40px 14px 40px;
+  gap: 4px;
   align-items: center;
   justify-content: center;
 }
@@ -1679,7 +1700,7 @@ th {
   box-sizing: border-box;
   width: 100%;
   min-height: 30px;
-  padding: 4px 8px;
+  padding: 4px 6px;
   color: #fff;
   appearance: textfield;
   background: rgba(5, 10, 13, 0.72);
@@ -1705,6 +1726,7 @@ th {
 .check-ring {
   color: var(--green);
   text-align: center;
+  white-space: nowrap;
 }
 
 .check-ring {
@@ -2228,7 +2250,8 @@ th {
   }
 
   .match-row {
-    grid-template-columns: 34px 66px 72px 50px minmax(142px, 1fr) 102px minmax(142px, 1fr) 112px 28px;
+    grid-template-columns: 34px 66px 72px 50px minmax(132px, 1fr) 102px minmax(132px, 1fr) 126px 28px;
+    column-gap: 8px;
     min-height: 44px;
   }
 
@@ -2245,8 +2268,8 @@ th {
   }
 
   .pick-inputs {
-    grid-template-columns: 38px 12px 38px;
-    gap: 5px;
+    grid-template-columns: 40px 14px 40px;
+    gap: 4px;
   }
 
   .pick-inputs input {
