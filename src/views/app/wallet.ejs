@@ -37,19 +37,50 @@
 
       <form class="panel form" action="/app/carteira/saques" method="post">
         <h2>Solicitar saque</h2>
-        <p class="muted">O saque e enviado automaticamente pelo Asaas para a chave PIX CPF/CNPJ do titular cadastrado.</p>
+        <p class="muted">Para sua seguranca, o e-mail da conta precisa estar validado e cada saque exige um codigo enviado por e-mail.</p>
         <label>Valor do saque
           <input type="number" name="amount" min="<%= settings.withdrawalMinimum %>" max="<%= user.walletBalance %>" step="0.01" value="<%= settings.withdrawalMinimum %>" required>
         </label>
         <p class="muted">Destino: <strong><%= user.cpfMasked || "CPF/CNPJ cadastrado" %></strong></p>
-        <button class="button secondary" type="submit" <%= Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20) || !user.billingCpfCnpj ? "disabled" : "" %>>Solicitar saque</button>
+        <button class="button secondary" type="submit" <%= Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20) || !user.billingCpfCnpj || !user.emailVerifiedAt ? "disabled" : "" %>>Solicitar saque</button>
         <% if (Number(user.walletBalance || 0) < Number(settings.withdrawalMinimum || 20)) { %>
           <p class="muted">Voce precisa ter pelo menos <%= formatMoney(settings.withdrawalMinimum) %> disponivel para sacar.</p>
         <% } else if (!user.billingCpfCnpj) { %>
           <p class="muted">Para liberar o saque automatico, o CPF/CNPJ do titular precisa estar cadastrado na carteira.</p>
+        <% } else if (!user.emailVerifiedAt) { %>
+          <p class="muted">Valide o e-mail da conta para liberar solicitacoes de saque.</p>
         <% } %>
       </form>
     </div>
+
+    <% if (!user.emailVerifiedAt) { %>
+      <section class="panel form security-panel">
+        <div>
+          <p class="eyebrow">Validacao obrigatoria</p>
+          <h2>Valide seu e-mail para sacar</h2>
+          <p class="muted">Enviaremos um codigo de 6 digitos para <strong><%= user.email %></strong>. Depois da validacao, cada saque ainda pedira um novo codigo por seguranca.</p>
+        </div>
+        <form action="/app/email/verificacao/enviar" method="post">
+          <button class="button" type="submit">Enviar codigo por e-mail</button>
+        </form>
+        <% if (user.emailVerification) { %>
+          <form class="inline-code-form" action="/app/email/verificacao/confirmar" method="post">
+            <label>Codigo recebido
+              <input class="code-input" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6" required>
+            </label>
+            <button class="button secondary" type="submit">Validar e-mail</button>
+          </form>
+        <% } %>
+      </section>
+    <% } else { %>
+      <section class="panel security-panel verified">
+        <div>
+          <p class="eyebrow">E-mail validado</p>
+          <h2>Saques protegidos por codigo</h2>
+          <p class="muted">A conta esta pronta para saque. Ao solicitar, o sistema enviara um codigo para confirmar a transferencia.</p>
+        </div>
+      </section>
+    <% } %>
 
     <div class="grid wallet-grid">
       <article class="panel">
@@ -64,9 +95,9 @@
       <article class="panel">
         <h2>Como o saque funciona</h2>
         <dl class="details">
-          <div><dt>1. Solicitacao</dt><dd>Voce informa o valor do saque.</dd></div>
-          <div><dt>2. Reserva</dt><dd>O valor sai do saldo para evitar uso duplicado.</dd></div>
-          <div><dt>3. Pagamento</dt><dd>O Asaas envia o PIX para o CPF/CNPJ cadastrado.</dd></div>
+          <div><dt>1. Validacao</dt><dd>O e-mail da conta precisa estar confirmado.</dd></div>
+          <div><dt>2. Codigo</dt><dd>Cada solicitacao exige codigo enviado por e-mail.</dd></div>
+          <div><dt>3. Pagamento</dt><dd>Apos confirmar, o PIX e enviado ao CPF/CNPJ cadastrado.</dd></div>
         </dl>
       </article>
     </div>
@@ -102,4 +133,13 @@
     </section>
   </div>
 </section>
+<script>
+  (() => {
+    document.querySelectorAll(".code-input").forEach((input) => {
+      input.addEventListener("input", () => {
+        input.value = input.value.replace(/\D/g, "").slice(0, 6);
+      });
+    });
+  })();
+</script>
 <%- include("../partials/footer") %>

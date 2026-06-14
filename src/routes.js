@@ -5,7 +5,7 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
-const { isEmailEnabled, sendPasswordResetCode } = require("./services/mailer");
+const { isEmailEnabled, sendEmailVerificationCode, sendPasswordResetCode, sendWithdrawalCode } = require("./services/mailer");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
 const { championships, isKnownTeam, teams } = require("./teams");
 const {
@@ -87,6 +87,8 @@ function normalizeData(data) {
   data.participations ||= [];
   data.users.forEach((user) => {
     user.walletBalance = Number(user.walletBalance || 0);
+    user.emailVerifiedAt ||= null;
+    user.emailVerification ||= null;
   });
   data.payments.forEach((payment) => {
     payment.type ||= payment.poolId ? "pool_entry" : "deposit";
@@ -698,6 +700,72 @@ function router(store) {
     res.render("app/wallet", { title: "Minha carteira", user, payments });
   });
 
+  app.post("/app/email/verificacao/enviar", requireAuth, async (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const token = crypto.randomBytes(18).toString("hex");
+    const code = generateRecoveryCode();
+    const destination = maskEmailAddress(user.email);
+    user.emailVerification = {
+      token,
+      codeHash: recoveryCodeHash(token, code),
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      createdAt: todayIso()
+    };
+    store.write(data);
+
+    if (isEmailEnabled()) {
+      try {
+        await sendEmailVerificationCode(user, code);
+        req.flash("success", `Enviamos um codigo para ${destination}.`);
+      } catch (error) {
+        req.flash("error", `Nao foi possivel enviar o e-mail agora: ${error.message}`);
+        req.flash("success", `Codigo de teste para validar e-mail em ${destination}: ${code}`);
+      }
+    } else {
+      req.flash("success", "SMTP ainda nao configurado. Use o codigo de teste abaixo para validar o e-mail.");
+      req.flash("success", `Codigo de teste para validar e-mail em ${destination}: ${code}`);
+    }
+    return res.redirect("/app/carteira");
+  });
+
+  app.post("/app/email/verificacao/confirmar", requireAuth, (req, res) => {
+    const code = onlyDigits(req.body.code).slice(0, 6);
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const verification = user.emailVerification;
+
+    if (!verification || new Date(verification.expiresAt) < new Date()) {
+      req.flash("error", "Codigo de e-mail expirado. Solicite um novo codigo.");
+      return res.redirect("/app/carteira");
+    }
+
+    verification.attempts = Number(verification.attempts || 0);
+    if (verification.attempts >= 5) {
+      user.emailVerification = null;
+      store.write(data);
+      req.flash("error", "Muitas tentativas. Solicite um novo codigo.");
+      return res.redirect("/app/carteira");
+    }
+
+    if (code.length !== 6 || verification.codeHash !== recoveryCodeHash(verification.token, code)) {
+      verification.attempts += 1;
+      store.write(data);
+      req.flash("error", "Codigo de e-mail invalido.");
+      return res.redirect("/app/carteira");
+    }
+
+    user.emailVerifiedAt = todayIso();
+    user.emailVerification = null;
+    audit(data, user.id, "user.email_verified", "users", null, { id: user.id, email: user.email }, req);
+    store.write(data);
+    req.flash("success", "E-mail validado com sucesso. Saques liberados com confirmacao por codigo.");
+    return res.redirect("/app/carteira");
+  });
+
   app.get(["/historico", "/app/historico"], requireAuth, (req, res) => {
     const data = store.read();
     normalizeData(data);
@@ -811,6 +879,107 @@ function router(store) {
       req.flash("error", "Para sacar automaticamente, primeiro gere um deposito com CPF ou CNPJ do titular cadastrado.");
       return res.redirect("/app/carteira");
     }
+    if (!user.emailVerifiedAt) {
+      req.flash("error", "Valide o e-mail da conta antes de solicitar saque.");
+      return res.redirect("/app/carteira");
+    }
+
+    const token = crypto.randomBytes(18).toString("hex");
+    const code = generateRecoveryCode();
+    req.session.pendingWithdrawal = {
+      token,
+      amount,
+      codeHash: recoveryCodeHash(token, code),
+      attempts: 0,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    };
+
+    if (isEmailEnabled()) {
+      try {
+        await sendWithdrawalCode(user, code, res.locals.formatMoney(amount));
+        req.flash("success", `Enviamos um codigo de confirmacao para ${maskEmailAddress(user.email)}.`);
+      } catch (error) {
+        req.flash("error", `Nao foi possivel enviar o e-mail agora: ${error.message}`);
+        req.flash("success", `Codigo de teste para confirmar saque de ${res.locals.formatMoney(amount)}: ${code}`);
+      }
+    } else {
+      req.flash("success", "SMTP ainda nao configurado. Use o codigo de teste abaixo para confirmar o saque.");
+      req.flash("success", `Codigo de teste para confirmar saque de ${res.locals.formatMoney(amount)}: ${code}`);
+    }
+
+    return res.redirect("/app/carteira/saques/confirmar");
+  });
+
+  app.get("/app/carteira/saques/confirmar", requireAuth, (req, res) => {
+    const pendingWithdrawal = req.session.pendingWithdrawal;
+    if (!pendingWithdrawal || new Date(pendingWithdrawal.expiresAt) < new Date()) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Codigo de saque expirado. Solicite o saque novamente.");
+      return res.redirect("/app/carteira");
+    }
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    return res.render("app/withdrawal-confirm", {
+      title: "Confirmar saque",
+      user,
+      amount: Number(pendingWithdrawal.amount || 0),
+      attemptsLeft: Math.max(0, 5 - Number(pendingWithdrawal.attempts || 0))
+    });
+  });
+
+  app.post("/app/carteira/saques/confirmar", requireAuth, async (req, res) => {
+    const pendingWithdrawal = req.session.pendingWithdrawal;
+    const code = onlyDigits(req.body.code).slice(0, 6);
+    if (!pendingWithdrawal || new Date(pendingWithdrawal.expiresAt) < new Date()) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Codigo de saque expirado. Solicite o saque novamente.");
+      return res.redirect("/app/carteira");
+    }
+
+    pendingWithdrawal.attempts = Number(pendingWithdrawal.attempts || 0);
+    if (pendingWithdrawal.attempts >= 5) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Muitas tentativas. Solicite o saque novamente.");
+      return res.redirect("/app/carteira");
+    }
+
+    if (code.length !== 6 || pendingWithdrawal.codeHash !== recoveryCodeHash(pendingWithdrawal.token, code)) {
+      pendingWithdrawal.attempts += 1;
+      req.flash("error", "Codigo de saque invalido.");
+      return res.redirect("/app/carteira/saques/confirmar");
+    }
+
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const amount = Number(pendingWithdrawal.amount);
+    const minimum = Number(data.settings.withdrawalMinimum || 20);
+    if (!Number.isFinite(amount) || amount < minimum) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", `O saque minimo e ${res.locals.formatMoney(minimum)}.`);
+      return res.redirect("/app/carteira");
+    }
+    if (amount > Number(user.walletBalance || 0)) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Saldo insuficiente para concluir este saque.");
+      return res.redirect("/app/carteira");
+    }
+    if (!user.emailVerifiedAt) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Valide o e-mail da conta antes de solicitar saque.");
+      return res.redirect("/app/carteira");
+    }
+    if (!isAsaasEnabled()) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Saque automatico indisponivel: ASAAS_API_KEY nao configurada.");
+      return res.redirect("/app/carteira");
+    }
+    if (![11, 14].includes(String(user.billingCpfCnpj || "").length)) {
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Para sacar automaticamente, primeiro gere um deposito com CPF ou CNPJ do titular cadastrado.");
+      return res.redirect("/app/carteira");
+    }
 
     const beforeBalance = Number(user.walletBalance || 0);
     user.walletBalance = beforeBalance - amount;
@@ -889,10 +1058,12 @@ function router(store) {
         audit(latest, user.id, "wallet.withdrawal_canceled", "payments", { id: payment.id }, { id: payment.id, error: error.message }, req);
         store.write(latest);
       }
+      delete req.session.pendingWithdrawal;
       req.flash("error", `Nao foi possivel enviar o saque pelo Asaas: ${error.message}`);
       return res.redirect("/app/carteira");
     }
 
+    delete req.session.pendingWithdrawal;
     req.flash("success", finalStatus === "paid" ? "Saque enviado automaticamente para o CPF/CNPJ cadastrado." : "Saque enviado ao Asaas. O valor ficou reservado ate a conclusao da transferencia.");
     return res.redirect("/app/carteira");
   });

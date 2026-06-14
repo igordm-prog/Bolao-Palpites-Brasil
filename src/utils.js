@@ -180,6 +180,7 @@ function labelForAuditAction(action) {
     "auth.password_reset_requested": "Redefinicao solicitada",
     "auth.password_reset_completed": "Senha redefinida",
     "user.registered": "Usuario cadastrado",
+    "user.email_verified": "E-mail validado",
     "user.status_changed": "Status do usuario alterado",
     "pool.created": "Bolao criado",
     "pool.status_changed": "Status do bolao alterado",

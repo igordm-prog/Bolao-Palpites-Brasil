@@ -34,33 +34,59 @@ function createTransporter() {
 }
 
 async function sendPasswordResetCode(user, code) {
+  return sendSecurityCodeEmail(user, code, {
+    subject: "Codigo de recuperacao de senha",
+    title: "Recuperacao de senha",
+    intro: "Seu codigo de recuperacao do Bolao Palpites Brasil e:",
+    warning: "Se voce nao solicitou esta recuperacao, ignore este e-mail."
+  });
+}
+
+async function sendEmailVerificationCode(user, code) {
+  return sendSecurityCodeEmail(user, code, {
+    subject: "Codigo de validacao do e-mail",
+    title: "Validacao de e-mail",
+    intro: "Seu codigo para validar o e-mail da conta e:",
+    warning: "Se voce nao solicitou esta validacao, acesse sua conta e altere a senha."
+  });
+}
+
+async function sendWithdrawalCode(user, code, amountLabel) {
+  return sendSecurityCodeEmail(user, code, {
+    subject: "Codigo de confirmacao de saque",
+    title: "Confirmacao de saque",
+    intro: `Seu codigo para confirmar o saque de ${amountLabel} e:`,
+    warning: "Se voce nao solicitou este saque, nao informe este codigo para ninguem e altere sua senha."
+  });
+}
+
+async function sendSecurityCodeEmail(user, code, content) {
   const config = mailConfig();
   const transporter = createTransporter();
-  const subject = "Codigo de recuperacao de senha";
   const text = [
     `Ola, ${user.name}.`,
     "",
-    `Seu codigo de recuperacao do Bolao Palpites Brasil e: ${code}`,
+    `${content.intro} ${code}`,
     "Ele expira em 15 minutos.",
     "",
-    "Se voce nao solicitou esta recuperacao, ignore este e-mail."
+    content.warning
   ].join("\n");
 
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">
-      <h2>Recuperacao de senha</h2>
+      <h2>${content.title}</h2>
       <p>Ola, ${user.name}.</p>
-      <p>Seu codigo de recuperacao do <strong>Bolao Palpites Brasil</strong> e:</p>
+      <p>${content.intro}</p>
       <p style="font-size:28px;font-weight:800;letter-spacing:4px">${code}</p>
       <p>Ele expira em 15 minutos.</p>
-      <p>Se voce nao solicitou esta recuperacao, ignore este e-mail.</p>
+      <p>${content.warning}</p>
     </div>
   `;
 
   return transporter.sendMail({
     from: config.from,
     to: user.email,
-    subject,
+    subject: content.subject,
     text,
     html
   });
@@ -68,5 +94,7 @@ async function sendPasswordResetCode(user, code) {
 
 module.exports = {
   isEmailEnabled,
-  sendPasswordResetCode
+  sendEmailVerificationCode,
+  sendPasswordResetCode,
+  sendWithdrawalCode
 };

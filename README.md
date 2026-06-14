@@ -1,6 +1,6 @@
 # Bolao Palpites Brasil
 
-MVP local para o Bolao Palpites Brasil, com cadastro por CPF, login, carteira PIX automatica via Asaas, palpites, pontuacao automatica, ranking e painel administrativo.
+MVP local para o Bolao Palpites Brasil, com cadastro por CPF, login, carteira com PIX automatizado via Asaas, palpites, pontuacao automatica, ranking e painel administrativo.
 
 ## Rodar localmente
 
