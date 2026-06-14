@@ -10,7 +10,8 @@
         <input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" maxlength="14" required>
       </label>
       <label>Data de nascimento
-        <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" required>
+        <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" aria-describedby="birthDate-error" required>
+        <small class="field-error" id="birthDate-error">Informe uma data de nascimento valida no formato dd/mm/aaaa.</small>
       </label>
       <label>E-mail
         <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" maxlength="254" required>
@@ -76,18 +77,33 @@
       return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
     }
 
+    function updateBirthDateState() {
+      if (!birthDate) return true;
+      const hasValue = birthDate.value.trim().length > 0;
+      const isComplete = birthDate.value.length === 10;
+      const valid = hasValue && isComplete && isValidBirthDate(birthDate.value);
+      const shouldShowError = hasValue && (!isComplete || !valid);
+
+      birthDate.classList.toggle("is-invalid", shouldShowError);
+      birthDate.setAttribute("aria-invalid", shouldShowError ? "true" : "false");
+      birthDate.setCustomValidity(shouldShowError ? "Informe uma data de nascimento valida no formato dd/mm/aaaa." : "");
+      return !shouldShowError;
+    }
+
     cpf?.addEventListener("input", maskCpf);
 
     birthDate?.addEventListener("input", () => {
       const digits = birthDate.value.replace(/\D/g, "").slice(0, 8);
       const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
       birthDate.value = parts.join("/");
+      updateBirthDateState();
     });
+    birthDate?.addEventListener("blur", updateBirthDateState);
 
     form?.addEventListener("submit", (event) => {
       name?.setCustomValidity("");
       cpf?.setCustomValidity("");
-      birthDate?.setCustomValidity("");
+      const birthDateOk = updateBirthDateState();
 
       if (name && !isValidName(name.value)) {
         name.setCustomValidity("Informe nome e sobrenome validos, sem numeros ou simbolos.");
@@ -95,7 +111,7 @@
       if (cpf && !isValidCpf(cpf.value)) {
         cpf.setCustomValidity("Informe um CPF valido.");
       }
-      if (birthDate && !isValidBirthDate(birthDate.value)) {
+      if (birthDate && birthDateOk && !isValidBirthDate(birthDate.value)) {
         birthDate.setCustomValidity("Digite uma data valida no formato dd/mm/aaaa.");
       }
 

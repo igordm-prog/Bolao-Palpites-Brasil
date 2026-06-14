@@ -813,6 +813,27 @@ select {
   border-radius: 8px;
 }
 
+input.is-invalid,
+select.is-invalid {
+  color: #fff4f2;
+  background: rgba(82, 18, 14, 0.52);
+  border-color: #ff6b57;
+  box-shadow: 0 0 0 2px rgba(255, 107, 87, 0.16);
+}
+
+.field-error {
+  display: none;
+  color: #ff8b78;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+input.is-invalid + .field-error,
+select.is-invalid + .field-error {
+  display: block;
+}
+
 .team-select-field {
   min-width: 0;
 }
