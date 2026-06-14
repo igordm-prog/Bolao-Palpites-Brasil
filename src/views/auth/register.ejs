@@ -4,16 +4,16 @@
     <h1>Criar conta</h1>
     <div class="form-grid">
       <label>Nome completo
-        <input name="name" autocomplete="name" required>
+        <input name="name" autocomplete="name" minlength="6" maxlength="120" placeholder="Nome e sobrenome" required>
       </label>
       <label>CPF
-        <input name="cpf" inputmode="numeric" placeholder="000.000.000-00" required>
+        <input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" pattern="\d{3}\.\d{3}\.\d{3}-\d{2}" maxlength="14" required>
       </label>
       <label>Data de nascimento
         <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" pattern="\d{2}/\d{2}/\d{4}" maxlength="10" required>
       </label>
       <label>E-mail
-        <input type="email" name="email" autocomplete="email" required>
+        <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" maxlength="254" required>
       </label>
       <label>Telefone/WhatsApp
         <input name="phone" autocomplete="tel" required>
@@ -33,11 +33,76 @@
 </section>
 <script>
   (() => {
+    const form = document.querySelector('form[action="/cadastro"]');
+    const name = document.querySelector('input[name="name"]');
+    const cpf = document.querySelector('input[name="cpf"]');
     const birthDate = document.querySelector('input[name="birthDate"]');
+
+    function isValidCpf(value) {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length !== 11 || /^(\d)\1+$/.test(digits)) return false;
+      const calc = (length) => {
+        let sum = 0;
+        for (let i = 0; i < length; i += 1) {
+          sum += Number(digits[i]) * (length + 1 - i);
+        }
+        const rest = (sum * 10) % 11;
+        return rest === 10 ? 0 : rest;
+      };
+      return calc(9) === Number(digits[9]) && calc(10) === Number(digits[10]);
+    }
+
+    function maskCpf() {
+      if (!cpf) return;
+      const digits = cpf.value.replace(/\D/g, "").slice(0, 11);
+      cpf.value = digits
+        .replace(/^(\d{3})(\d)/, "$1.$2")
+        .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3-$4");
+    }
+
+    function isValidName(value) {
+      const normalized = value.trim().replace(/\s+/g, " ");
+      if (normalized.length < 6) return false;
+      if (/\d|[<>{}[\]()/\\|_=+*@#$%^&;:!?]/.test(normalized)) return false;
+      return normalized.split(" ").filter(Boolean).length >= 2;
+    }
+
+    function isValidBirthDate(value) {
+      const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!match) return false;
+      const [, day, month, year] = match.map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+    }
+
+    cpf?.addEventListener("input", maskCpf);
+
     birthDate?.addEventListener("input", () => {
       const digits = birthDate.value.replace(/\D/g, "").slice(0, 8);
       const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
       birthDate.value = parts.join("/");
+    });
+
+    form?.addEventListener("submit", (event) => {
+      name?.setCustomValidity("");
+      cpf?.setCustomValidity("");
+      birthDate?.setCustomValidity("");
+
+      if (name && !isValidName(name.value)) {
+        name.setCustomValidity("Informe nome e sobrenome validos, sem numeros ou simbolos.");
+      }
+      if (cpf && !isValidCpf(cpf.value)) {
+        cpf.setCustomValidity("Informe um CPF valido.");
+      }
+      if (birthDate && !isValidBirthDate(birthDate.value)) {
+        birthDate.setCustomValidity("Digite uma data valida no formato dd/mm/aaaa.");
+      }
+
+      if (!form.checkValidity()) {
+        event.preventDefault();
+        form.reportValidity();
+      }
     });
   })();
 </script>

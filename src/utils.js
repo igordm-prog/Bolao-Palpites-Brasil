@@ -14,15 +14,45 @@ function maskCpf(cpf) {
   return `***.***.***-${digits.slice(-2)}`;
 }
 
+function isRealDateParts(year, month, day) {
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return (
+    date.getUTCFullYear() === Number(year) &&
+    date.getUTCMonth() === Number(month) - 1 &&
+    date.getUTCDate() === Number(day)
+  );
+}
+
 function normalizeBirthDate(value = "") {
   const raw = String(value).trim();
   const brMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (brMatch) {
     const [, day, month, year] = brMatch;
+    if (!isRealDateParts(year, month, day)) return "";
     return `${year}-${month}-${day}`;
   }
   const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  return isoMatch ? raw : "";
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return isRealDateParts(year, month, day) ? raw : "";
+  }
+  return "";
+}
+
+function isValidEmail(email = "") {
+  const normalized = String(email).trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized) && normalized.length <= 254;
+}
+
+function isValidFullName(name = "") {
+  const normalized = String(name)
+    .trim()
+    .replace(/\s+/g, " ");
+  if (normalized.length < 6 || normalized.length > 120) return false;
+  if (/\d|[<>{}[\]()/\\|_=+*@#$%^&;:!?]/.test(normalized)) return false;
+  const parts = normalized.split(" ");
+  if (parts.length < 2) return false;
+  return parts.every((part) => /^[A-Za-zÀ-ÖØ-öø-ÿ'.-]{2,}$/.test(part));
 }
 
 function isValidCpf(cpf) {
@@ -200,6 +230,8 @@ module.exports = {
   normalizeBirthDate,
   hashCpf,
   maskCpf,
+  isValidEmail,
+  isValidFullName,
   isValidCpf,
   isAdult,
   strongPassword,

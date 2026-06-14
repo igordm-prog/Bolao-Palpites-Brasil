@@ -11,6 +11,8 @@ const {
   hashCpf,
   isAdult,
   isValidCpf,
+  isValidEmail,
+  isValidFullName,
   isWeekend,
   maskCpf,
   normalizeBirthDate,
@@ -300,9 +302,14 @@ function router(store) {
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedCpf = onlyDigits(cpf);
     const normalizedBirthDate = normalizeBirthDate(birthDate);
+    const normalizedName = String(name || "").trim().replace(/\s+/g, " ");
+    const normalizedPhone = String(phone || "").trim();
 
     const errors = [];
-    if (!name || !normalizedEmail || !phone || !normalizedBirthDate) errors.push("Preencha todos os dados obrigatorios.");
+    if (!normalizedName || !normalizedEmail || !normalizedPhone || !birthDate) errors.push("Preencha todos os dados obrigatorios.");
+    if (birthDate && !normalizedBirthDate) errors.push("Data de nascimento invalida. Use o formato dd/mm/aaaa.");
+    if (!isValidFullName(normalizedName)) errors.push("Informe nome e sobrenome validos, sem numeros ou simbolos.");
+    if (!isValidEmail(normalizedEmail)) errors.push("E-mail invalido.");
     if (!isValidCpf(normalizedCpf)) errors.push("CPF invalido.");
     if (!isAdult(normalizedBirthDate) || adultConfirmation !== "on") errors.push("E necessario confirmar maioridade.");
     if (!strongPassword(password)) {
@@ -320,13 +327,13 @@ function router(store) {
     const passwordHash = await bcrypt.hash(password, 12);
     const user = {
       id: store.nextId(data, "users"),
-      name: String(name).trim(),
+      name: normalizedName,
       cpfHash: hashCpf(normalizedCpf),
       cpfMasked: maskCpf(normalizedCpf),
       billingCpfCnpj: normalizedCpf,
       birthDate: normalizedBirthDate,
       email: normalizedEmail,
-      phone: String(phone).trim(),
+      phone: normalizedPhone,
       passwordHash,
       role: "user",
       status: "active",
