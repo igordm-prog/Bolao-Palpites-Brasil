@@ -14,7 +14,22 @@
       <a class="brand" href="/">
         <img class="brand-logo" src="/img/brand/logo-horizontal.svg" alt="Bolao Palpites Brasil">
       </a>
-      <nav class="nav">
+      <div class="topbar-actions">
+        <% if (currentUser) { %>
+          <a class="top-wallet-chip mobile-wallet-chip" href="/app/carteira" aria-label="Saldo da carteira">
+            <span>Saldo</span>
+            <strong><%= formatMoney(currentUser.walletBalance) %></strong>
+            <em>Depositar</em>
+          </a>
+        <% } %>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu">
+          <span></span>
+          <span></span>
+          <span></span>
+          <b>Menu</b>
+        </button>
+      </div>
+      <nav class="nav" id="site-menu">
         <% if (currentUser) { %>
           <a class="<%= currentPath === '/app/boloes' || (currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites')) ? 'active' : '' %>" href="<%= navGamesHref %>">Jogos</a>
           <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="<%= navRankingHref %>">Ranking</a>
@@ -24,7 +39,7 @@
           <a class="<%= currentPath.includes('/historico') ? 'active' : '' %>" href="/app/historico">Historico</a>
           <a class="<%= currentPath === '/privacidade' ? 'active' : '' %>" href="/privacidade">Ajuda</a>
           <a class="<%= currentPath === '/app/conta' || currentPath === '/app/carteira' || currentPath === '/app/perfil' ? 'active' : '' %>" href="/app/conta">Conta</a>
-          <a class="top-wallet-chip" href="/app/carteira" aria-label="Saldo da carteira">
+          <a class="top-wallet-chip desktop-wallet-chip" href="/app/carteira" aria-label="Saldo da carteira">
             <span>Saldo</span>
             <strong><%= formatMoney(currentUser.walletBalance) %></strong>
             <em>Depositar</em>
@@ -39,6 +54,26 @@
         <% } %>
       </nav>
     </header>
+    <script>
+      (() => {
+        const button = document.querySelector(".menu-toggle");
+        const menu = document.getElementById("site-menu");
+        if (!button || !menu) return;
+
+        function setOpen(open) {
+          document.body.classList.toggle("menu-open", open);
+          button.setAttribute("aria-expanded", open ? "true" : "false");
+        }
+
+        button.addEventListener("click", () => setOpen(!document.body.classList.contains("menu-open")));
+        menu.querySelectorAll("a, button").forEach((item) => {
+          item.addEventListener("click", () => setOpen(false));
+        });
+        window.addEventListener("resize", () => {
+          if (window.innerWidth > 860) setOpen(false);
+        });
+      })();
+    </script>
     <main>
       <% if (errors && errors.length) { %>
         <section class="flash error"><% errors.forEach((item) => { %><p><%= item %></p><% }) %></section>
