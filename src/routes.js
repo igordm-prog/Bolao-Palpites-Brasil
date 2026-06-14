@@ -6,7 +6,7 @@ const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
-const { championships, isKnownTeam, teamColors, teams } = require("./teams");
+const { championships, colorsForTeam, isKnownTeam, teams } = require("./teams");
 const {
   hashCpf,
   isAdult,
@@ -191,7 +191,7 @@ function router(store) {
 
   app.get("/crest/:team.svg", (req, res) => {
     const team = decodeURIComponent(req.params.team || "");
-    const [primary, secondary] = teamColors[team] || ["#24323a", "#f5f7f8"];
+    const [primary, secondary] = colorsForTeam(team);
     const initials = escapeSvg(initialsForTeam(team));
     const label = escapeSvg(team);
     const svg = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1138,8 +1138,8 @@ function router(store) {
     const poolId = Number(req.body.poolId);
     const homeTeam = String(req.body.homeTeam || "").trim();
     const awayTeam = String(req.body.awayTeam || "").trim();
-    const homeTeamMeta = teams.find((team) => team.name === homeTeam);
-    const awayTeamMeta = teams.find((team) => team.name === awayTeam);
+    const homeTeamMeta = teams.find((team) => team.name === homeTeam && team.championship === req.body.championship);
+    const awayTeamMeta = teams.find((team) => team.name === awayTeam && team.championship === req.body.championship);
     if (!data.pools.some((pool) => pool.id === poolId) || !championships.includes(req.body.championship)) {
       req.flash("error", "Bolao ou campeonato invalido.");
       return res.redirect("/admin/jogos");
