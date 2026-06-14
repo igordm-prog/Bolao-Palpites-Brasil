@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 260" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 164" role="img" aria-labelledby="title desc">
   <title id="title">Bolao Palpites Brasil</title>
-  <desc id="desc">Logo horizontal do Bolao Palpites Brasil com escudo BPB</desc>
+  <desc id="desc">Marca horizontal do Bolao Palpites Brasil com escudo BPB</desc>
   <defs>
-    <radialGradient id="shieldBg" cx="50%" cy="45%" r="70%">
+    <radialGradient id="bg" cx="50%" cy="45%" r="70%">
       <stop offset="0" stop-color="#0f3d25"/>
       <stop offset="0.55" stop-color="#082018"/>
       <stop offset="1" stop-color="#030709"/>
@@ -13,7 +13,7 @@
     </linearGradient>
     <linearGradient id="white" x1="0" x2="0" y1="0" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.5" stop-color="#cfd6d8"/>
+      <stop offset="0.5" stop-color="#d9dee0"/>
       <stop offset="1" stop-color="#ffffff"/>
     </linearGradient>
     <linearGradient id="gold" x1="0" x2="0" y1="0" y2="1">
@@ -21,32 +21,30 @@
       <stop offset="1" stop-color="#f2bf12"/>
     </linearGradient>
     <filter id="shadow" x="-20%" y="-30%" width="150%" height="170%">
-      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity="0.55"/>
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.45"/>
     </filter>
   </defs>
-  <rect width="820" height="260" fill="none"/>
-  <g transform="translate(22 13) scale(.72)" filter="url(#shadow)">
-    <path d="M128 20 225 55v105c0 64-40 103-97 130C71 263 31 224 31 160V55Z" fill="url(#white)"/>
-    <path d="M128 34 211 64v95c0 55-34 88-83 112-49-24-83-57-83-112V64Z" fill="#061116"/>
-    <path d="M128 45 199 70v88c0 48-28 77-71 99-43-22-71-51-71-99V70Z" fill="url(#shieldBg)"/>
-    <path d="M58 75 128 50l70 25v21c-45-24-94-24-140 0Z" fill="url(#green)" opacity="0.9"/>
-    <path d="M197 74v83c0 42-22 69-58 90l20-31c19-16 29-36 29-61V80Z" fill="url(#gold)"/>
-    <path d="M62 219c19 19 42 28 66 41 14-7 27-14 39-23l-36-1c-25 0-48-5-69-17Z" fill="#176fe5" opacity="0.95"/>
-    <path d="M67 76h122M89 76v42h78V76M116 76v22h25V76M128 112v2M67 220h122M128 220v28M92 220a36 36 0 0 1 72 0" fill="none" stroke="#23d957" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
-    <circle cx="128" cy="127" r="4" fill="#23d957"/>
-    <circle cx="128" cy="220" r="5" fill="#23d957"/>
-    <circle cx="128" cy="250" r="5" fill="#23d957"/>
-    <text x="128" y="177" text-anchor="middle" font-family="Arial Black, Impact, Arial, sans-serif" font-size="70" font-weight="900" fill="url(#white)" stroke="#ffffff" stroke-width="1.2" letter-spacing="-3">BPB</text>
-    <path d="m128 0 8 23h24l-20 14 8 23-20-14-20 14 8-23-20-14h24Z" fill="url(#gold)"/>
-    <path d="m74 26 5 15h16l-13 9 5 15-13-9-13 9 5-15-13-9h16Z" fill="#21c553"/>
-    <path d="m182 26 5 15h16l-13 9 5 15-13-9-13 9 5-15-13-9h16Z" fill="#21c553"/>
-  </g>
-  <line x1="226" y1="48" x2="226" y2="210" stroke="#ffffff" stroke-opacity=".25" stroke-width="2"/>
   <g filter="url(#shadow)">
-    <text x="260" y="118" font-family="Arial Black, Impact, Arial, sans-serif" font-size="84" font-weight="900" fill="url(#white)" letter-spacing="5">BOLAO</text>
-    <rect x="260" y="143" width="70" height="5" fill="#22d463"/>
-    <text x="344" y="154" font-family="Arial Black, Impact, Arial, sans-serif" font-size="33" font-weight="900" fill="#ffffff" letter-spacing="17">PALPITES</text>
-    <rect x="662" y="143" width="70" height="5" fill="#22d463"/>
-    <text x="345" y="206" font-family="Arial Black, Impact, Arial, sans-serif" font-size="34" font-weight="900" fill="#27d85f" letter-spacing="24">BRASIL</text>
+    <g transform="translate(15 8) scale(.46)">
+      <path d="M128 20 225 55v105c0 64-40 103-97 130C71 263 31 224 31 160V55Z" fill="url(#white)"/>
+      <path d="M128 34 211 64v95c0 55-34 88-83 112-49-24-83-57-83-112V64Z" fill="#061116"/>
+      <path d="M128 45 199 70v88c0 48-28 77-71 99-43-22-71-51-71-99V70Z" fill="url(#bg)"/>
+      <path d="M58 75 128 50l70 25v21c-45-24-94-24-140 0Z" fill="url(#green)" opacity="0.9"/>
+      <path d="M197 74v83c0 42-22 69-58 90l20-31c19-16 29-36 29-61V80Z" fill="url(#gold)"/>
+      <path d="M62 219c19 19 42 28 66 41 14-7 27-14 39-23l-36-1c-25 0-48-5-69-17Z" fill="#176fe5" opacity="0.95"/>
+      <path d="M67 76h122M89 76v42h78V76M116 76v22h25V76M128 112v2M67 220h122M128 220v28M92 220a36 36 0 0 1 72 0" fill="none" stroke="#23d957" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+      <circle cx="128" cy="127" r="4" fill="#23d957"/>
+      <circle cx="128" cy="220" r="5" fill="#23d957"/>
+      <circle cx="128" cy="250" r="5" fill="#23d957"/>
+      <text x="128" y="177" text-anchor="middle" font-family="Arial Black, Impact, Arial, sans-serif" font-size="70" font-weight="900" fill="url(#white)" stroke="#ffffff" stroke-width="1.2" letter-spacing="-3">BPB</text>
+      <path d="m128 0 8 23h24l-20 14 8 23-20-14-20 14 8-23-20-14h24Z" fill="url(#gold)"/>
+      <path d="m74 26 5 15h16l-13 9 5 15-13-9-13 9 5-15-13-9h16Z" fill="#21c553"/>
+      <path d="m182 26 5 15h16l-13 9 5 15-13-9-13 9 5-15-13-9h16Z" fill="#21c553"/>
+    </g>
+    <line x1="150" y1="30" x2="150" y2="134" stroke="#ffffff" stroke-opacity=".26" stroke-width="1.5"/>
+    <text x="178" y="70" font-family="Arial Black, Impact, Arial, sans-serif" font-size="47" font-weight="900" fill="url(#white)" letter-spacing="1">BOLAO</text>
+    <text x="181" y="100" font-family="Arial Black, Impact, Arial, sans-serif" font-size="21" font-weight="900" fill="#ffffff" letter-spacing="8">PALPITES</text>
+    <rect x="181" y="111" width="212" height="4" fill="#22d463"/>
+    <text x="183" y="141" font-family="Arial Black, Impact, Arial, sans-serif" font-size="21" font-weight="900" fill="#27d85f" letter-spacing="14">BRASIL</text>
   </g>
 </svg>

@@ -78,8 +78,8 @@ body:has(.betting-page) .brand {
 }
 
 body:has(.betting-page) .brand-logo {
-  width: 218px;
-  height: 70px;
+  width: 230px;
+  height: 64px;
 }
 
 body:has(.betting-page) .nav {
@@ -110,8 +110,8 @@ body:has(.betting-page) .nav a.active::after {
 
 .brand-logo {
   display: block;
-  width: clamp(176px, 18vw, 248px);
-  height: 58px;
+  width: clamp(204px, 18vw, 246px);
+  height: 62px;
   object-fit: contain;
   object-position: left center;
 }
@@ -529,7 +529,7 @@ dd {
 .login-card-head {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 4px;
 }
 
@@ -539,11 +539,10 @@ dd {
 }
 
 .login-icon {
-  width: 56px;
-  height: 56px;
-  background: rgba(34, 212, 99, 0.08) url("/img/brand/favicon.svg") center / 44px 44px no-repeat;
-  border: 1px solid rgba(34, 212, 99, 0.38);
-  border-radius: 8px;
+  flex: 0 0 54px;
+  width: 54px;
+  height: 62px;
+  background: url("/img/brand/logo-mark.svg") center / contain no-repeat;
 }
 
 .login-card input {
@@ -2170,8 +2169,8 @@ th {
   }
 
   body:has(.betting-page) .brand-logo {
-    width: clamp(176px, 18vw, 248px);
-    height: 58px;
+    width: clamp(204px, 18vw, 246px);
+    height: 62px;
   }
 
   body:has(.betting-page) .nav {
