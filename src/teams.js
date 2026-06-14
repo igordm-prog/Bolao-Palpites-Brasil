@@ -1,54 +1,5 @@
 const championships = ["Serie A", "Serie B", "Serie C", "Serie D"];
 
-const teamColors = {
-  Flamengo: ["#d71920", "#111111"],
-  Palmeiras: ["#006437", "#ffffff"],
-  Corinthians: ["#f2f2f2", "#111111"],
-  Gremio: ["#00a7e1", "#111111"],
-  "Atletico Mineiro": ["#111111", "#ffffff"],
-  "Sao Paulo": ["#ffffff", "#d71920"],
-  Internacional: ["#d71920", "#ffffff"],
-  Cruzeiro: ["#1c5fb8", "#ffffff"],
-  Botafogo: ["#111111", "#ffffff"],
-  Bahia: ["#0057b8", "#d71920"],
-  Vasco: ["#111111", "#ffffff"],
-  "Athletico-PR": ["#d71920", "#111111"],
-  Ceara: ["#111111", "#ffffff"],
-  Sport: ["#d71920", "#f6c13a"],
-  Mirassol: ["#f6c13a", "#16803c"],
-  Juventude: ["#16803c", "#ffffff"],
-  Goias: ["#008c45", "#ffffff"],
-  Coritiba: ["#007a3d", "#ffffff"],
-  Novorizontino: ["#f6c13a", "#111111"],
-  "Vila Nova": ["#d71920", "#ffffff"],
-  Avai: ["#1f73d8", "#ffffff"],
-  Chapecoense: ["#1b8f3a", "#ffffff"],
-  CRB: ["#d71920", "#ffffff"],
-  Amazonas: ["#f6c13a", "#111111"],
-  "Ponte Preta": ["#111111", "#ffffff"],
-  Operario: ["#111111", "#ffffff"],
-  Ituano: ["#d71920", "#111111"],
-  Brusque: ["#f6c13a", "#d71920"],
-  "Sampaio Correa": ["#f6c13a", "#16803c"],
-  Londrina: ["#7dd3fc", "#ffffff"],
-  Guarani: ["#16803c", "#ffffff"],
-  Tombense: ["#d71920", "#ffffff"],
-  CSA: ["#0057b8", "#d71920"],
-  Nautico: ["#d71920", "#ffffff"],
-  Figueirense: ["#111111", "#ffffff"],
-  "Botafogo-PB": ["#111111", "#ffffff"],
-  Maringa: ["#111111", "#008c45"],
-  Caxias: ["#8b0000", "#ffffff"],
-  "Ypiranga-RS": ["#16803c", "#f6c13a"],
-  Confianca: ["#0057b8", "#ffffff"],
-  "Sao Bernardo": ["#f6c13a", "#111111"],
-  ABC: ["#111111", "#ffffff"],
-  Anapolis: ["#0057b8", "#ffffff"],
-  "Londrina-PR": ["#7dd3fc", "#ffffff"],
-  Itabaiana: ["#d71920", "#ffffff"],
-  "Sao Jose-RS": ["#0057b8", "#ffffff"]
-};
-
 const teamsByChampionship = {
   "Serie A": [
     "Flamengo",
@@ -212,27 +163,6 @@ const teams = Object.entries(teamsByChampionship).flatMap(([championship, names]
   names.map((name) => ({ name, championship }))
 );
 
-const palette = [
-  ["#d71920", "#111111"],
-  ["#0057b8", "#ffffff"],
-  ["#008c45", "#ffffff"],
-  ["#f6c13a", "#111111"],
-  ["#7b1fa2", "#ffffff"],
-  ["#111111", "#ffffff"],
-  ["#00a7e1", "#111111"],
-  ["#8b0000", "#f5f7f8"],
-  ["#1b8f3a", "#f6c13a"],
-  ["#f97316", "#111827"]
-];
-
-function hashTeamName(name) {
-  return String(name || "").split("").reduce((total, char) => total + char.charCodeAt(0), 0);
-}
-
-function colorsForTeam(name) {
-  return teamColors[name] || palette[hashTeamName(name) % palette.length];
-}
-
 function teamsForChampionship(championship) {
   return teams.filter((team) => team.championship === championship);
 }
@@ -243,10 +173,8 @@ function isKnownTeam(name) {
 
 module.exports = {
   championships,
-  teamColors,
   teams,
   teamsByChampionship,
   teamsForChampionship,
-  isKnownTeam,
-  colorsForTeam
+  isKnownTeam
 };

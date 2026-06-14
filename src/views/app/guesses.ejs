@@ -74,6 +74,8 @@
           const day = new Date(`${match.matchDate}T12:00:00`).getDay() === 6 ? "SAB" : "DOM";
           const dayFilter = day === "SAB" ? "saturday" : "sunday";
           const searchText = `${match.homeTeam} ${match.awayTeam} ${match.championship}`.toLowerCase();
+          const homeCrest = teamCrestUrl(match.homeTeam);
+          const awayCrest = teamCrestUrl(match.awayTeam);
         %>
           <div class="match-row" data-day="<%= dayFilter %>" data-championship="<%= match.championship %>" data-search="<%= searchText %>">
             <button class="favorite" type="button" aria-label="Favoritar jogo">&#9734;</button>
@@ -82,7 +84,11 @@
             <span class="match-time"><%= match.matchTime %></span>
             <span class="team home-team">
               <strong><%= match.homeTeam %></strong>
-              <img class="crest-img" src="<%= teamCrestUrl(match.homeTeam) %>" alt="Brasao <%= match.homeTeam %>">
+              <% if (homeCrest) { %>
+                <img class="crest-img" src="<%= homeCrest %>" alt="Brasao <%= match.homeTeam %>">
+              <% } else { %>
+                <span class="crest-missing" title="Brasao original pendente">Pendente</span>
+              <% } %>
             </span>
             <span class="pick-inputs">
               <input type="number" min="0" name="home_<%= match.id %>" value="<%= guess.homeScore ?? "" %>" placeholder="-" <%= locked ? "disabled" : "" %>>
@@ -90,7 +96,11 @@
               <input type="number" min="0" name="away_<%= match.id %>" value="<%= guess.awayScore ?? "" %>" placeholder="-" <%= locked ? "disabled" : "" %>>
             </span>
             <span class="team away-team">
-              <img class="crest-img" src="<%= teamCrestUrl(match.awayTeam) %>" alt="Brasao <%= match.awayTeam %>">
+              <% if (awayCrest) { %>
+                <img class="crest-img" src="<%= awayCrest %>" alt="Brasao <%= match.awayTeam %>">
+              <% } else { %>
+                <span class="crest-missing" title="Brasao original pendente">Pendente</span>
+              <% } %>
               <strong><%= match.awayTeam %></strong>
             </span>
             <span class="pick-status"><%= locked ? "Palpite fechado" : "Aberto para palpite" %></span>

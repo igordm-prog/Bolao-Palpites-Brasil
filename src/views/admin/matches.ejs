@@ -63,15 +63,24 @@
             <tr><td colspan="6">Nenhum jogo cadastrado.</td></tr>
           <% } %>
           <% matches.forEach((match) => { %>
+            <% const homeCrest = teamCrestUrl(match.homeTeam); const awayCrest = teamCrestUrl(match.awayTeam); %>
             <tr>
               <td><%= match.poolName %></td>
               <td><%= match.championship %></td>
               <td>
                 <span class="admin-match-teams">
                   <strong><%= match.homeTeam %></strong>
-                  <img class="crest-img" src="<%= teamCrestUrl(match.homeTeam) %>" alt="">
+                  <% if (homeCrest) { %>
+                    <img class="crest-img" src="<%= homeCrest %>" alt="">
+                  <% } else { %>
+                    <span class="crest-missing">Pendente</span>
+                  <% } %>
                   <span>x</span>
-                  <img class="crest-img" src="<%= teamCrestUrl(match.awayTeam) %>" alt="">
+                  <% if (awayCrest) { %>
+                    <img class="crest-img" src="<%= awayCrest %>" alt="">
+                  <% } else { %>
+                    <span class="crest-missing">Pendente</span>
+                  <% } %>
                   <strong><%= match.awayTeam %></strong>
                 </span>
               </td>
@@ -97,9 +106,14 @@
     function updatePreview(select) {
       const option = select.selectedOptions[0];
       const preview = document.querySelector(`[data-team-preview="${select.name}"]`);
-      if (!preview || !option?.dataset.crest) return;
+      if (!preview) return;
+      if (!option?.dataset.crest) {
+        preview.hidden = true;
+        return;
+      }
       preview.src = option.dataset.crest;
       preview.alt = `Brasao ${option.value}`;
+      preview.hidden = false;
     }
 
     function filterTeams() {

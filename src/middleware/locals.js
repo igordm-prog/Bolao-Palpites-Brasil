@@ -59,7 +59,9 @@ function attachLocals(store) {
       if (fs.existsSync(path.join(crestDir, `${slug}.png`))) return `/img/crests/${slug}.png`;
       if (fs.existsSync(path.join(crestDir, `${slug}.gif`))) return `/img/crests/${slug}.gif`;
       if (fs.existsSync(path.join(crestDir, `${slug}.jpg`))) return `/img/crests/${slug}.jpg`;
-      return `/crest/${encodeURIComponent(name)}.svg`;
+      if (fs.existsSync(path.join(crestDir, `${slug}.jpeg`))) return `/img/crests/${slug}.jpeg`;
+      if (fs.existsSync(path.join(crestDir, `${slug}.webp`))) return `/img/crests/${slug}.webp`;
+      return null;
     };
     res.locals.isAdmin = user && ["admin", "super_admin"].includes(user.role);
     next();

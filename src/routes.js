@@ -6,7 +6,7 @@ const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
-const { championships, colorsForTeam, isKnownTeam, teams } = require("./teams");
+const { championships, isKnownTeam, teams } = require("./teams");
 const {
   hashCpf,
   isAdult,
@@ -20,24 +20,6 @@ const {
 } = require("./utils");
 
 const paymentStatuses = ["awaiting", "paid", "canceled", "refunded", "expired"];
-
-function initialsForTeam(name) {
-  return String(name || "FC")
-    .split(/\s|-/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 3)
-    .toUpperCase();
-}
-
-function escapeSvg(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function getCurrentUser(data, req) {
   return data.users.find((user) => user.id === req.session.userId);
@@ -188,32 +170,6 @@ function applyAsaasTransferStatus(data, payment, asaasTransfer, event, req) {
 
 function router(store) {
   const app = express.Router();
-
-  app.get("/crest/:team.svg", (req, res) => {
-    const team = decodeURIComponent(req.params.team || "");
-    const [primary, secondary] = colorsForTeam(team);
-    const initials = escapeSvg(initialsForTeam(team));
-    const label = escapeSvg(team);
-    const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="${label}">
-  <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop stop-color="${primary}" offset="0"/>
-      <stop stop-color="${secondary}" offset="1"/>
-    </linearGradient>
-    <filter id="s" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".35"/>
-    </filter>
-  </defs>
-  <path filter="url(#s)" d="M32 4 54 12v17c0 15-9 25-22 31C19 54 10 44 10 29V12L32 4Z" fill="url(#g)" stroke="#e8eef0" stroke-width="3"/>
-  <path d="M17 15h30v8H17z" fill="#ffffff" opacity=".28"/>
-  <path d="M32 8v49" stroke="#ffffff" stroke-width="4" opacity=".38"/>
-  <circle cx="32" cy="34" r="14" fill="#000000" opacity=".22"/>
-  <circle cx="32" cy="34" r="14" fill="none" stroke="#ffffff" stroke-width="2" opacity=".45"/>
-  <text x="32" y="39" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" font-weight="900" fill="#fff">${initials}</text>
-</svg>`;
-    res.type("image/svg+xml").set("Cache-Control", "public, max-age=86400").send(svg);
-  });
 
   app.get("/", (req, res) => {
     const data = store.read();

@@ -626,7 +626,7 @@ select {
 
 .admin-match-teams {
   display: inline-grid;
-  grid-template-columns: minmax(90px, 1fr) 30px 18px 30px minmax(90px, 1fr);
+  grid-template-columns: minmax(90px, 1fr) minmax(30px, auto) 18px minmax(30px, auto) minmax(90px, 1fr);
   align-items: center;
   gap: 8px;
   min-width: min(360px, 100%);
@@ -1697,6 +1697,20 @@ th {
   display: block;
   object-fit: contain;
   filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
+}
+
+.crest-missing {
+  display: inline-grid;
+  min-width: 28px;
+  min-height: 24px;
+  place-items: center;
+  color: #9aa4a8;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .crest {
