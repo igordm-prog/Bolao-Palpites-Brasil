@@ -794,6 +794,66 @@ dd {
   margin-bottom: 0;
 }
 
+.reset-card {
+  display: grid;
+  gap: 16px;
+  width: min(480px, calc(100vw - 32px));
+  padding: 28px;
+}
+
+.reset-card h1 {
+  margin-bottom: 0;
+}
+
+.password-rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.password-rules span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 9px;
+  color: var(--muted);
+  background: rgba(7, 12, 15, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.password-rules span::before {
+  width: 9px;
+  height: 9px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 50%;
+  content: "";
+}
+
+.password-rules span.ok {
+  color: #dfffe5;
+  border-color: rgba(53, 196, 71, 0.46);
+}
+
+.password-rules span.ok::before {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(53, 196, 71, 0.12);
+}
+
+.reset-back-link {
+  justify-self: center;
+  color: #dce3e6;
+  font-size: 0.92rem;
+}
+
+.reset-back-link:hover {
+  color: var(--green);
+}
+
 .recovery-methods {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2515,6 +2575,7 @@ th {
   .metrics,
   .mini-metrics,
   .form-grid,
+  .password-rules,
   .recovery-methods,
   .wallet-grid {
     grid-template-columns: 1fr;

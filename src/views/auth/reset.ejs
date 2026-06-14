@@ -1,14 +1,97 @@
 <%- include("../partials/head", { title }) %>
 <section class="auth-shell">
-  <form class="panel form" action="/redefinir/<%= token %>" method="post">
-    <h1>Nova senha</h1>
-    <label>Senha
-      <input type="password" name="password" autocomplete="new-password" required>
+  <form class="panel form reset-card" action="/redefinir/<%= token %>" method="post" novalidate>
+    <p class="eyebrow">Acesso confirmado</p>
+    <h1>Crie sua nova senha</h1>
+    <p class="muted">Use uma senha forte para proteger sua carteira, seus palpites e seus dados de acesso.</p>
+
+    <label>Nova senha
+      <input type="password" name="password" autocomplete="new-password" aria-describedby="password-error" required>
+      <small class="field-error" id="password-error">Use no minimo 8 caracteres, com maiuscula, minuscula, numero e simbolo.</small>
     </label>
-    <label>Confirmar senha
-      <input type="password" name="confirmPassword" autocomplete="new-password" required>
+
+    <label>Confirmar nova senha
+      <input type="password" name="confirmPassword" autocomplete="new-password" aria-describedby="confirmPassword-error" required>
+      <small class="field-error" id="confirmPassword-error">A confirmacao precisa ser igual a nova senha.</small>
     </label>
-    <button class="button full" type="submit">Salvar senha</button>
+
+    <div class="password-rules" aria-label="Requisitos da senha">
+      <span data-rule="length">8 caracteres</span>
+      <span data-rule="upper">Maiuscula</span>
+      <span data-rule="lower">Minuscula</span>
+      <span data-rule="number">Numero</span>
+      <span data-rule="symbol">Simbolo</span>
+    </div>
+
+    <button class="button full login-submit" type="submit">Salvar nova senha</button>
+    <a class="reset-back-link" href="/login">Voltar para entrar</a>
   </form>
 </section>
+<script>
+  (() => {
+    const form = document.querySelector('form[action^="/redefinir/"]');
+    const password = document.querySelector('input[name="password"]');
+    const confirmPassword = document.querySelector('input[name="confirmPassword"]');
+    const rules = {
+      length: document.querySelector('[data-rule="length"]'),
+      upper: document.querySelector('[data-rule="upper"]'),
+      lower: document.querySelector('[data-rule="lower"]'),
+      number: document.querySelector('[data-rule="number"]'),
+      symbol: document.querySelector('[data-rule="symbol"]')
+    };
+
+    function setFieldState(input, valid, message, force = false) {
+      if (!input) return true;
+      const hasValue = input.value.trim().length > 0;
+      const showError = force || hasValue ? !valid : false;
+      input.classList.toggle("is-invalid", showError);
+      input.setAttribute("aria-invalid", showError ? "true" : "false");
+      input.setCustomValidity(showError ? message : "");
+      return !showError;
+    }
+
+    function checks(value) {
+      return {
+        length: value.length >= 8,
+        upper: /[A-Z]/.test(value),
+        lower: /[a-z]/.test(value),
+        number: /\d/.test(value),
+        symbol: /[^A-Za-z0-9]/.test(value)
+      };
+    }
+
+    function updateRules(value) {
+      const result = checks(value);
+      Object.entries(result).forEach(([key, ok]) => {
+        rules[key]?.classList.toggle("ok", ok);
+      });
+      return Object.values(result).every(Boolean);
+    }
+
+    function validatePassword(force = false) {
+      const valid = updateRules(password?.value || "");
+      const ok = setFieldState(password, valid, "Use no minimo 8 caracteres, com maiuscula, minuscula, numero e simbolo.", force);
+      validateConfirmPassword(force && Boolean(confirmPassword?.value));
+      return ok;
+    }
+
+    function validateConfirmPassword(force = false) {
+      const valid = Boolean(confirmPassword?.value) && confirmPassword.value === password.value;
+      return setFieldState(confirmPassword, valid, "A confirmacao precisa ser igual a nova senha.", force);
+    }
+
+    password?.addEventListener("input", () => validatePassword());
+    password?.addEventListener("blur", () => validatePassword(true));
+    confirmPassword?.addEventListener("input", () => validateConfirmPassword());
+    confirmPassword?.addEventListener("blur", () => validateConfirmPassword(true));
+
+    form?.addEventListener("submit", (event) => {
+      const valid = [validatePassword(true), validateConfirmPassword(true)].every(Boolean);
+      if (!valid || !form.checkValidity()) {
+        event.preventDefault();
+        form.reportValidity();
+      }
+    });
+  })();
+</script>
 <%- include("../partials/footer") %>
