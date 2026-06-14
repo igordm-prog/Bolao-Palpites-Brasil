@@ -159,6 +159,48 @@ td small {
   white-space: nowrap;
 }
 
+.top-wallet-chip {
+  display: inline-grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 8px 6px 12px;
+  color: #fff;
+  background: rgba(10, 18, 21, 0.94);
+  border: 1px solid rgba(34, 212, 99, 0.34);
+  border-radius: 8px;
+}
+
+.top-wallet-chip::after {
+  display: none;
+}
+
+.top-wallet-chip span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.top-wallet-chip strong {
+  color: #fff;
+  font-size: 0.98rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.top-wallet-chip em {
+  min-height: 26px;
+  padding: 4px 8px;
+  color: #07100a;
+  background: var(--green);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .button {
   display: inline-flex;
   min-height: 42px;
@@ -933,6 +975,15 @@ select {
     linear-gradient(180deg, rgba(22, 31, 36, 0.96), rgba(12, 18, 22, 0.98));
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+.account-hero.compact-page-hero {
+  grid-template-columns: 1fr;
+  padding: 16px 18px;
+}
+
+.account-hero.compact-page-hero p:not(.eyebrow) {
+  max-width: 780px;
 }
 
 .account-hero h1 {

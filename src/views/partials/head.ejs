@@ -24,6 +24,11 @@
           <a class="<%= currentPath.includes('/historico') ? 'active' : '' %>" href="/app/historico">Historico</a>
           <a class="<%= currentPath === '/privacidade' ? 'active' : '' %>" href="/privacidade">Ajuda</a>
           <a class="<%= currentPath === '/app/conta' || currentPath === '/app/carteira' || currentPath === '/app/perfil' ? 'active' : '' %>" href="/app/conta">Conta</a>
+          <a class="top-wallet-chip" href="/app/carteira" aria-label="Saldo da carteira">
+            <span>Saldo</span>
+            <strong><%= formatMoney(currentUser.walletBalance) %></strong>
+            <em>Depositar</em>
+          </a>
           <% if (isAdmin) { %><a class="<%= currentPath === '/admin' ? 'active' : '' %>" href="/admin">Painel</a><% } %>
           <form action="/logout" method="post">
             <button class="link-button" type="submit">Sair</button>
