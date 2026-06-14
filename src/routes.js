@@ -14,6 +14,7 @@ const {
   isValidEmail,
   isValidFullName,
   isValidPhone,
+  isReasonableBirthDate,
   isWeekend,
   maskCpf,
   normalizeBirthDate,
@@ -308,7 +309,9 @@ function router(store) {
 
     const errors = [];
     if (!normalizedName || !normalizedEmail || !normalizedPhone || !birthDate) errors.push("Preencha todos os dados obrigatorios.");
-    if (birthDate && !normalizedBirthDate) errors.push("Data de nascimento invalida. Use o formato dd/mm/aaaa.");
+    if (birthDate && (!normalizedBirthDate || !isReasonableBirthDate(normalizedBirthDate))) {
+      errors.push("Data de nascimento invalida. Informe uma data real entre 18 e 120 anos.");
+    }
     if (!isValidFullName(normalizedName)) errors.push("Informe nome e sobrenome validos, sem numeros ou simbolos.");
     if (!isValidEmail(normalizedEmail)) errors.push("E-mail invalido.");
     if (!isValidPhone(normalizedPhone)) errors.push("Telefone/WhatsApp invalido.");

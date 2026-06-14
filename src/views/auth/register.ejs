@@ -13,7 +13,7 @@
       </label>
       <label>Data de nascimento
         <input name="birthDate" inputmode="numeric" autocomplete="bday" placeholder="dd/mm/aaaa" maxlength="10" aria-describedby="birthDate-error" required>
-        <small class="field-error" id="birthDate-error">Informe uma data de nascimento valida no formato dd/mm/aaaa.</small>
+        <small class="field-error" id="birthDate-error">Informe uma data real entre 18 e 120 anos no formato dd/mm/aaaa.</small>
       </label>
       <label>E-mail
         <input type="email" name="email" autocomplete="email" placeholder="voce@email.com" maxlength="254" aria-describedby="email-error" required>
@@ -91,7 +91,12 @@
       if (!match) return false;
       const [, day, month, year] = match.map(Number);
       const date = new Date(Date.UTC(year, month - 1, day));
-      return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+      if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return false;
+      const today = new Date();
+      let age = today.getFullYear() - year;
+      const beforeBirthday = today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day);
+      if (beforeBirthday) age -= 1;
+      return age >= 18 && age <= 120;
     }
 
     function isValidEmail(value) {
@@ -152,7 +157,7 @@
     }
 
     function validateBirthDate(force = false) {
-      return setFieldState(fields.birthDate, isValidBirthDate(fields.birthDate?.value || ""), "Informe uma data de nascimento valida no formato dd/mm/aaaa.", force);
+      return setFieldState(fields.birthDate, isValidBirthDate(fields.birthDate?.value || ""), "Informe uma data real entre 18 e 120 anos no formato dd/mm/aaaa.", force);
     }
 
     function validateEmail(force = false) {

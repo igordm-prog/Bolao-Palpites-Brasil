@@ -39,6 +39,24 @@ function normalizeBirthDate(value = "") {
   return "";
 }
 
+function ageFromBirthDate(dateString) {
+  const normalized = normalizeBirthDate(dateString);
+  const birth = new Date(`${normalized}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+function isReasonableBirthDate(dateString) {
+  const age = ageFromBirthDate(dateString);
+  return age !== null && age >= 18 && age <= 120;
+}
+
 function isValidEmail(email = "") {
   const normalized = String(email).trim().toLowerCase();
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(normalized) && normalized.length <= 254;
@@ -79,16 +97,8 @@ function isValidCpf(cpf) {
 }
 
 function isAdult(dateString) {
-  const normalized = normalizeBirthDate(dateString);
-  const birth = new Date(`${normalized}T00:00:00`);
-  if (Number.isNaN(birth.getTime())) return false;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const beforeBirthday =
-    today.getMonth() < birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate());
-  if (beforeBirthday) age -= 1;
-  return age >= 18;
+  const age = ageFromBirthDate(dateString);
+  return age !== null && age >= 18;
 }
 
 function strongPassword(password) {
@@ -237,6 +247,7 @@ function publicUser(user) {
 module.exports = {
   onlyDigits,
   normalizeBirthDate,
+  isReasonableBirthDate,
   hashCpf,
   maskCpf,
   isValidEmail,
