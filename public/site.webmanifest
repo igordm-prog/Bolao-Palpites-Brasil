@@ -1,13 +1,25 @@
 {
   "name": "Bolao Palpites Brasil",
   "short_name": "BPB",
-  "start_url": "/",
+  "description": "Bolao de palpites com carteira, PIX, ranking e auditoria dos palpites.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "portrait",
   "background_color": "#05090c",
   "theme_color": "#071018",
+  "categories": ["sports", "finance", "entertainment"],
   "icons": [
     {
       "src": "/img/brand/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/img/brand/logo-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
