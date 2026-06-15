@@ -32,7 +32,8 @@
         <img class="pix-qr" src="data:image/png;base64,<%= payment.pixEncodedImage %>" alt="QR Code PIX">
       <% } %>
       <span>PIX copia e cola</span>
-      <code><%= payment.pixCode %></code>
+      <code id="pix-copy-code"><%= payment.pixCode %></code>
+      <button class="button pix-copy-button" type="button" data-copy-target="pix-copy-code">Copiar PIX copia e cola</button>
       <% if (payment.pixExpirationDate) { %>
         <small>Valido ate <%= formatDateTime(payment.pixExpirationDate) %></small>
       <% } %>
@@ -90,6 +91,33 @@
     }
 
     window.setTimeout(syncPayment, 2500);
+  })();
+
+  (() => {
+    const button = document.querySelector("[data-copy-target]");
+    if (!button) return;
+    const originalLabel = button.textContent;
+    button.addEventListener("click", async () => {
+      const target = document.getElementById(button.dataset.copyTarget);
+      const text = target?.textContent?.trim();
+      if (!text) return;
+      try {
+        await navigator.clipboard.writeText(text);
+        button.textContent = "PIX copiado";
+        button.classList.add("copied");
+      } catch (error) {
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        button.textContent = "PIX selecionado";
+      }
+      window.setTimeout(() => {
+        button.textContent = originalLabel;
+        button.classList.remove("copied");
+      }, 2500);
+    });
   })();
 </script>
 <%- include("../partials/footer") %>

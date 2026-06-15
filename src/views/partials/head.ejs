@@ -21,6 +21,25 @@
             <strong><%= formatMoney(currentUser.walletBalance) %></strong>
             <em>Depositar</em>
           </a>
+          <details class="notification-menu mobile-notification-menu">
+            <summary class="notification-bell" aria-label="Notificacoes">
+              <span class="bell-shape"></span>
+              <% if (notificationCount) { %><b><%= notificationCount %></b><% } %>
+            </summary>
+            <div class="notification-popover">
+              <strong>Notificacoes</strong>
+              <% if (notifications && notifications.length) { %>
+                <% notifications.forEach((item) => { %>
+                  <a class="notification-item <%= item.tone %>" href="<%= item.href %>">
+                    <span><%= item.title %></span>
+                    <small><%= item.text %></small>
+                  </a>
+                <% }) %>
+              <% } else { %>
+                <p>Tudo em dia por aqui.</p>
+              <% } %>
+            </div>
+          </details>
         <% } %>
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu">
           <span></span>
@@ -39,6 +58,25 @@
           <a class="<%= currentPath.includes('/historico') ? 'active' : '' %>" href="/app/historico">Historico</a>
           <a class="<%= currentPath === '/privacidade' ? 'active' : '' %>" href="/privacidade">Ajuda</a>
           <a class="<%= currentPath === '/app/conta' || currentPath === '/app/carteira' || currentPath === '/app/perfil' ? 'active' : '' %>" href="/app/conta">Conta</a>
+          <details class="notification-menu desktop-notification-menu">
+            <summary class="notification-bell" aria-label="Notificacoes">
+              <span class="bell-shape"></span>
+              <% if (notificationCount) { %><b><%= notificationCount %></b><% } %>
+            </summary>
+            <div class="notification-popover">
+              <strong>Notificacoes</strong>
+              <% if (notifications && notifications.length) { %>
+                <% notifications.forEach((item) => { %>
+                  <a class="notification-item <%= item.tone %>" href="<%= item.href %>">
+                    <span><%= item.title %></span>
+                    <small><%= item.text %></small>
+                  </a>
+                <% }) %>
+              <% } else { %>
+                <p>Tudo em dia por aqui.</p>
+              <% } %>
+            </div>
+          </details>
           <a class="top-wallet-chip desktop-wallet-chip" href="/app/carteira" aria-label="Saldo da carteira">
             <span>Saldo</span>
             <strong><%= formatMoney(currentUser.walletBalance) %></strong>

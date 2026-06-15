@@ -131,6 +131,7 @@ function labelForStatus(status) {
   const labels = {
     active: "Ativo",
     awaiting: "Aguardando",
+    awaiting_email: "Aguardando confirmacao de e-mail",
     awaiting_payment: "Aguardando pagamento",
     blocked: "Bloqueado",
     canceled: "Cancelado",

@@ -42,6 +42,43 @@ async function sendPasswordResetCode(user, code) {
   });
 }
 
+async function sendRegistrationConfirmationLink(user, link) {
+  const config = mailConfig();
+  const transporter = createTransporter();
+  const subject = "Confirme seu cadastro";
+  const text = [
+    `Ola, ${user.name}.`,
+    "",
+    "Confirme seu cadastro no Bolao Palpites Brasil acessando o link abaixo:",
+    link,
+    "",
+    "O link expira em 24 horas.",
+    "",
+    "Se voce nao criou esta conta, ignore este e-mail."
+  ].join("\n");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111">
+      <h2>Confirme seu cadastro</h2>
+      <p>Ola, ${user.name}.</p>
+      <p>Confirme seu cadastro no <strong>Bolao Palpites Brasil</strong> para liberar o acesso ao site.</p>
+      <p><a href="${link}" style="display:inline-block;padding:12px 18px;background:#16a34a;color:#fff;text-decoration:none;border-radius:6px;font-weight:700">Confirmar cadastro</a></p>
+      <p>Ou copie e cole este link no navegador:</p>
+      <p style="word-break:break-all">${link}</p>
+      <p>O link expira em 24 horas.</p>
+      <p>Se voce nao criou esta conta, ignore este e-mail.</p>
+    </div>
+  `;
+
+  return transporter.sendMail({
+    from: config.from,
+    to: user.email,
+    subject,
+    text,
+    html
+  });
+}
+
 async function sendEmailVerificationCode(user, code) {
   return sendSecurityCodeEmail(user, code, {
     subject: "Codigo de validacao do e-mail",
@@ -96,5 +133,6 @@ module.exports = {
   isEmailEnabled,
   sendEmailVerificationCode,
   sendPasswordResetCode,
+  sendRegistrationConfirmationLink,
   sendWithdrawalCode
 };

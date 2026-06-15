@@ -23,6 +23,58 @@ function crestSlug(name = "") {
 
 const crestDir = path.join(__dirname, "..", "..", "public", "img", "crests");
 
+function buildNotifications(data, user, req) {
+  if (!user) return [];
+  const notifications = [];
+  const participations = data.participations || [];
+  const payments = data.payments || [];
+
+  if (!user.emailVerifiedAt && user.status === "active") {
+    notifications.push({
+      title: "Valide seu e-mail",
+      text: "Necessario para liberar saques.",
+      href: "/app/carteira",
+      tone: "warning"
+    });
+  }
+
+  const openPools = (data.pools || []).filter((pool) => pool.status === "open");
+  const newPools = openPools.filter(
+    (pool) => !participations.some((item) => item.userId === user.id && item.poolId === pool.id)
+  );
+  newPools.slice(0, 3).forEach((pool) => {
+    notifications.push({
+      title: "Novo bolao disponivel",
+      text: `${pool.name} esta aberto para participar.`,
+      href: "/app/boloes",
+      tone: "success"
+    });
+  });
+
+  const pendingDeposit = payments.find(
+    (payment) => payment.userId === user.id && payment.type === "deposit" && payment.status === "awaiting"
+  );
+  if (pendingDeposit) {
+    notifications.push({
+      title: "Deposito pendente",
+      text: `${formatMoney(pendingDeposit.amount)} aguardando pagamento.`,
+      href: `/app/pagamentos/${pendingDeposit.id}`,
+      tone: "info"
+    });
+  }
+
+  if (req.session.pendingWithdrawal) {
+    notifications.push({
+      title: "Confirme seu saque",
+      text: "Digite o codigo enviado por e-mail.",
+      href: "/app/carteira/saques/confirmar",
+      tone: "warning"
+    });
+  }
+
+  return notifications.slice(0, 6);
+}
+
 function attachLocals(store) {
   return (req, res, next) => {
     const data = store.read();
@@ -42,6 +94,8 @@ function attachLocals(store) {
     res.locals.navPool = navPool;
     res.locals.navGamesHref = user ? "/app/boloes" : "/login";
     res.locals.navRankingHref = navPool ? `/app/boloes/${navPool.id}/ranking` : user ? "/app/conta" : "/login";
+    res.locals.notifications = buildNotifications(data, user, req);
+    res.locals.notificationCount = res.locals.notifications.length;
     res.locals.errors = req.flash("error");
     res.locals.successes = req.flash("success");
     res.locals.formatMoney = formatMoney;

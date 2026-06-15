@@ -5,7 +5,13 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
-const { isEmailEnabled, sendEmailVerificationCode, sendPasswordResetCode, sendWithdrawalCode } = require("./services/mailer");
+const {
+  isEmailEnabled,
+  sendEmailVerificationCode,
+  sendPasswordResetCode,
+  sendRegistrationConfirmationLink,
+  sendWithdrawalCode
+} = require("./services/mailer");
 const { recalculatePool, rankingForPool } = require("./services/scoring");
 const { championships, isKnownTeam, teams } = require("./teams");
 const {
@@ -35,8 +41,16 @@ function recoveryCodeHash(token, code) {
   return crypto.createHash("sha256").update(`${token}:${code}`).digest("hex");
 }
 
+function tokenHash(token) {
+  return crypto.createHash("sha256").update(String(token)).digest("hex");
+}
+
 function generateRecoveryCode() {
   return String(crypto.randomInt(100000, 1000000));
+}
+
+function appUrl() {
+  return String(process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
 }
 
 function maskEmailAddress(email = "") {
@@ -377,6 +391,7 @@ function router(store) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
+    const confirmationToken = crypto.randomBytes(28).toString("hex");
     const user = {
       id: store.nextId(data, "users"),
       name: normalizedName,
@@ -388,8 +403,15 @@ function router(store) {
       phone: normalizedPhone,
       passwordHash,
       role: "user",
-      status: "active",
+      status: "awaiting_email",
       walletBalance: 0,
+      emailVerifiedAt: null,
+      emailVerification: {
+        purpose: "registration",
+        tokenHash: tokenHash(confirmationToken),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: todayIso()
+      },
       acceptedTermsAt: todayIso(),
       acceptedPrivacyAt: todayIso(),
       lastLoginAt: null,
@@ -400,9 +422,47 @@ function router(store) {
     data.users.push(user);
     audit(data, user.id, "user.registered", "users", null, { id: user.id, email: user.email }, req);
     store.write(data);
-    req.session.userId = user.id;
-    req.flash("success", "Cadastro criado com sucesso.");
-    return res.redirect("/app");
+    const confirmationLink = `${appUrl()}/confirmar-email/${confirmationToken}`;
+    if (isEmailEnabled()) {
+      try {
+        await sendRegistrationConfirmationLink(user, confirmationLink);
+        req.flash("success", "Cadastro criado. Enviamos um link de confirmacao para seu e-mail.");
+      } catch (error) {
+        req.flash("error", `Nao foi possivel enviar o e-mail de confirmacao agora: ${error.message}`);
+        req.flash("success", `Link de teste para confirmar cadastro: ${confirmationLink}`);
+      }
+    } else {
+      req.flash("success", "Cadastro criado. SMTP ainda nao configurado, use o link de teste abaixo para confirmar.");
+      req.flash("success", `Link de teste para confirmar cadastro: ${confirmationLink}`);
+    }
+    return res.redirect("/login");
+  });
+
+  app.get("/confirmar-email/:token", (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const hashedToken = tokenHash(req.params.token);
+    const user = data.users.find(
+      (item) =>
+        item.emailVerification?.purpose === "registration" &&
+        item.emailVerification?.tokenHash === hashedToken
+    );
+    if (!user || new Date(user.emailVerification.expiresAt) < new Date()) {
+      return res.status(400).render("status", {
+        title: "Link expirado",
+        message: "Este link de confirmacao expirou. Solicite suporte ou faca um novo cadastro.",
+        actionHref: "/login",
+        actionLabel: "Ir para login"
+      });
+    }
+
+    user.emailVerifiedAt = todayIso();
+    user.emailVerification = null;
+    if (user.status === "awaiting_email") user.status = "active";
+    audit(data, user.id, "user.email_verified", "users", null, { id: user.id, email: user.email, source: "registration" }, req);
+    store.write(data);
+    req.flash("success", "E-mail confirmado. Agora voce pode entrar no site.");
+    return res.redirect("/login");
   });
 
   app.get("/login", (req, res) => res.render("auth/login", { title: "Entrar" }));
@@ -422,6 +482,10 @@ function router(store) {
       return res.redirect("/login");
     }
     if (user.status !== "active") {
+      if (user.status === "awaiting_email") {
+        req.flash("error", "Confirme o cadastro pelo link enviado ao seu e-mail antes de entrar.");
+        return res.redirect("/login");
+      }
       req.flash("error", "Conta bloqueada. Entre em contato com o suporte.");
       return res.redirect("/login");
     }
