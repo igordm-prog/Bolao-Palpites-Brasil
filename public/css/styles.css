@@ -1011,6 +1011,49 @@ dd {
   margin-bottom: 0;
 }
 
+.device-login-card {
+  display: grid;
+  gap: 18px;
+}
+
+.device-login-card h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.05;
+}
+
+.device-session-details {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  background: rgba(4, 9, 12, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.device-session-details dd {
+  overflow-wrap: anywhere;
+}
+
+.security-note {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  background: rgba(34, 212, 99, 0.12);
+  border: 1px solid rgba(34, 212, 99, 0.28);
+  border-radius: 8px;
+}
+
+.security-note.warning {
+  background: rgba(255, 212, 59, 0.1);
+  border-color: rgba(255, 212, 59, 0.35);
+}
+
+.security-note span {
+  color: #c7d0d5;
+}
+
 .password-rules {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

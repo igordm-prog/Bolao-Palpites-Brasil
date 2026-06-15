@@ -97,6 +97,15 @@ async function sendWithdrawalCode(user, code, amountLabel) {
   });
 }
 
+async function sendLoginAccessCode(user, code) {
+  return sendSecurityCodeEmail(user, code, {
+    subject: "Codigo de acesso ao Bolao Palpites Brasil",
+    title: "Confirmacao de acesso",
+    intro: "Seu codigo para autorizar o acesso em um novo dispositivo e:",
+    warning: "Se voce nao esta tentando entrar no site, altere sua senha imediatamente."
+  });
+}
+
 async function sendSecurityCodeEmail(user, code, content) {
   const config = mailConfig();
   const transporter = createTransporter();
@@ -132,6 +141,7 @@ async function sendSecurityCodeEmail(user, code, content) {
 module.exports = {
   isEmailEnabled,
   sendEmailVerificationCode,
+  sendLoginAccessCode,
   sendPasswordResetCode,
   sendRegistrationConfirmationLink,
   sendWithdrawalCode

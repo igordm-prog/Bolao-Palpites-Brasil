@@ -1,0 +1,69 @@
+<%- include("../partials/head", { title }) %>
+
+<section class="auth-shell wide">
+  <div class="panel device-login-card">
+    <div class="login-card-head">
+      <span class="login-icon"></span>
+      <div>
+        <p class="eyebrow">Seguranca da conta</p>
+        <h1>Conta logada em outro dispositivo</h1>
+      </div>
+    </div>
+
+    <p class="muted">
+      Ja existe uma sessao ativa para <strong><%= user.email %></strong>. Para proteger sua conta,
+      so permitimos um dispositivo logado por vez.
+    </p>
+
+    <% if (activeDevice) { %>
+      <dl class="device-session-details">
+        <div>
+          <dt>Ultimo dispositivo ativo</dt>
+          <dd><%= activeDevice.userAgent || "Dispositivo nao identificado" %></dd>
+        </div>
+        <div>
+          <dt>IP registrado</dt>
+          <dd><%= activeDevice.ip || "Nao identificado" %></dd>
+        </div>
+      </dl>
+    <% } %>
+
+    <% if (pending.requiresCode) { %>
+      <div class="security-note warning">
+        <strong>Codigo obrigatorio</strong>
+        <span>Como ocorreram muitas tentativas em poucos minutos, enviamos um codigo para <%= destination %>.</span>
+      </div>
+
+      <form class="inline-code-form" action="/login/dispositivo/codigo" method="post">
+        <label>Codigo de acesso
+          <input class="code-input" name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" maxlength="6" required>
+        </label>
+        <button class="button" type="submit">Validar e entrar</button>
+      </form>
+      <p class="muted">Tentativas restantes: <%= attemptsLeft %></p>
+    <% } else { %>
+      <div class="security-note">
+        <strong>Deseja encerrar a outra sessao?</strong>
+        <span>Ao confirmar, o outro dispositivo sera desconectado automaticamente.</span>
+      </div>
+
+      <form action="/login/dispositivo/encerrar" method="post">
+        <button class="button full login-submit" type="submit">Deslogar outro dispositivo e entrar</button>
+      </form>
+    <% } %>
+
+    <a class="reset-back-link" href="/login">Voltar para login</a>
+  </div>
+</section>
+
+<script>
+  (() => {
+    const input = document.querySelector(".code-input");
+    if (!input) return;
+    input.addEventListener("input", () => {
+      input.value = input.value.replace(/\D/g, "").slice(0, 6);
+    });
+  })();
+</script>
+
+<%- include("../partials/footer") %>

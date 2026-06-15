@@ -178,6 +178,10 @@ function labelForAuditAction(action) {
   const labels = {
     "auth.login_success": "Login realizado",
     "auth.login_failed": "Falha no login",
+    "auth.concurrent_login_attempt": "Login em outro dispositivo",
+    "auth.login_code_verified": "Codigo de acesso validado",
+    "auth.session_replaced": "Sessao substituida",
+    "auth.logout": "Logout realizado",
     "auth.password_reset_requested": "Redefinicao solicitada",
     "auth.password_reset_completed": "Senha redefinida",
     "user.registered": "Usuario cadastrado",

@@ -79,6 +79,17 @@ function attachLocals(store) {
   return (req, res, next) => {
     const data = store.read();
     const user = data.users.find((item) => item.id === req.session.userId);
+    if (user && user.activeSessionToken && req.session.activeSessionToken !== user.activeSessionToken && req.path !== "/logout") {
+      delete req.session.userId;
+      delete req.session.activeSessionToken;
+      delete req.session.pendingWithdrawal;
+      req.flash("error", "Sua conta foi acessada em outro dispositivo e esta sessao foi encerrada.");
+      return res.redirect("/login");
+    }
+    if (!user && req.session.userId) {
+      delete req.session.userId;
+      delete req.session.activeSessionToken;
+    }
     const navPool =
       data.pools.find((pool) => pool.status === "open") ||
       data.pools.find((pool) => pool.status === "draft") ||

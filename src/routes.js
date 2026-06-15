@@ -8,6 +8,7 @@ const { audit } = require("./services/audit");
 const {
   isEmailEnabled,
   sendEmailVerificationCode,
+  sendLoginAccessCode,
   sendPasswordResetCode,
   sendRegistrationConfirmationLink,
   sendWithdrawalCode
@@ -89,6 +90,64 @@ function recoveryTestMessage(code, destination) {
   return `Codigo de teste enviado por e-mail para ${destination}: ${code}`;
 }
 
+function currentDeviceLabel(req) {
+  const agent = String(req.get("user-agent") || "Dispositivo nao identificado").slice(0, 180);
+  const ip = req.ip || req.socket?.remoteAddress || "IP nao identificado";
+  return { userAgent: agent, ip };
+}
+
+function activeSessionIsValid(user) {
+  return Boolean(user.activeSessionToken && (!user.activeSessionExpiresAt || new Date(user.activeSessionExpiresAt) > new Date()));
+}
+
+function recordSessionConflict(user) {
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  user.sessionConflictAttempts = (user.sessionConflictAttempts || []).filter(
+    (timestamp) => new Date(timestamp).getTime() >= tenMinutesAgo
+  );
+  user.sessionConflictAttempts.push(todayIso());
+  return user.sessionConflictAttempts.length;
+}
+
+function startPendingLogin(req, user, options = {}) {
+  req.session.pendingLogin = {
+    userId: user.id,
+    requiresCode: Boolean(options.requiresCode),
+    token: options.token || null,
+    codeHash: options.codeHash || null,
+    attempts: 0,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString()
+  };
+}
+
+function pendingLoginIsValid(req) {
+  const pending = req.session.pendingLogin;
+  return Boolean(pending?.userId && pending.expiresAt && new Date(pending.expiresAt) > new Date());
+}
+
+function finishLogin(req, user, data, options = {}) {
+  const sessionToken = crypto.randomBytes(32).toString("hex");
+  const device = currentDeviceLabel(req);
+  user.failedLoginCount = 0;
+  user.lockedUntil = null;
+  user.lastLoginAt = todayIso();
+  user.activeSessionToken = sessionToken;
+  user.activeSessionStartedAt = user.lastLoginAt;
+  user.activeSessionLastSeenAt = user.lastLoginAt;
+  user.activeSessionExpiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+  user.activeSessionDevice = device;
+  user.sessionConflictAttempts = (user.sessionConflictAttempts || []).filter(
+    (timestamp) => Date.now() - new Date(timestamp).getTime() <= 10 * 60 * 1000
+  );
+  req.session.userId = user.id;
+  req.session.activeSessionToken = sessionToken;
+  delete req.session.pendingLogin;
+  audit(data, user.id, options.replaced ? "auth.session_replaced" : "auth.login_success", "users", null, {
+    lastLoginAt: user.lastLoginAt,
+    device
+  }, req);
+}
+
 function normalizeData(data) {
   data.settings ||= {};
   data.settings.appName = "Bolao Palpites Brasil";
@@ -103,6 +162,7 @@ function normalizeData(data) {
     user.walletBalance = Number(user.walletBalance || 0);
     user.emailVerifiedAt ||= null;
     user.emailVerification ||= null;
+    user.sessionConflictAttempts ||= [];
   });
   data.payments.forEach((payment) => {
     payment.type ||= payment.poolId ? "pool_entry" : "deposit";
@@ -508,14 +568,145 @@ function router(store) {
 
     user.failedLoginCount = 0;
     user.lockedUntil = null;
-    user.lastLoginAt = todayIso();
-    audit(data, user.id, "auth.login_success", "users", null, { lastLoginAt: user.lastLoginAt }, req);
+    if (activeSessionIsValid(user) && req.session.activeSessionToken !== user.activeSessionToken) {
+      const conflictCount = recordSessionConflict(user);
+      const requiresCode = conflictCount > 4;
+      let code = null;
+      let token = null;
+      if (requiresCode) {
+        token = crypto.randomBytes(24).toString("hex");
+        code = generateRecoveryCode();
+      }
+      startPendingLogin(req, user, {
+        requiresCode,
+        token,
+        codeHash: code ? recoveryCodeHash(token, code) : null
+      });
+      audit(data, user.id, "auth.concurrent_login_attempt", "users", null, {
+        conflictCount,
+        requiresCode,
+        currentDevice: currentDeviceLabel(req),
+        activeDevice: user.activeSessionDevice || null
+      }, req);
+      store.write(data);
+      if (requiresCode) {
+        if (isEmailEnabled()) {
+          try {
+            await sendLoginAccessCode(user, code);
+            req.flash("success", `Enviamos um codigo de seguranca para ${maskEmailAddress(user.email)}.`);
+          } catch (error) {
+            req.flash("error", "Nao foi possivel enviar o codigo por e-mail. Verifique a configuracao SMTP.");
+          }
+        } else {
+          req.flash("success", `Codigo de teste para autorizar novo dispositivo: ${code}`);
+        }
+      } else {
+        req.flash("error", "Esta conta ja esta logada em outro dispositivo.");
+      }
+      return res.redirect("/login/dispositivo");
+    }
+
+    finishLogin(req, user, data);
     store.write(data);
-    req.session.userId = user.id;
+    return res.redirect(["admin", "super_admin"].includes(user.role) ? "/admin" : "/app");
+  });
+
+  app.get("/login/dispositivo", (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const pending = pendingLoginIsValid(req) ? req.session.pendingLogin : null;
+    if (!pending) {
+      delete req.session.pendingLogin;
+      req.flash("error", "A verificacao expirou. Entre novamente.");
+      return res.redirect("/login");
+    }
+    const user = data.users.find((item) => item.id === pending.userId);
+    if (!user) {
+      delete req.session.pendingLogin;
+      return res.redirect("/login");
+    }
+    return res.render("auth/device-login", {
+      title: "Confirmar dispositivo",
+      pending,
+      user,
+      activeDevice: user.activeSessionDevice || null,
+      destination: maskEmailAddress(user.email),
+      attemptsLeft: Math.max(0, 5 - Number(pending.attempts || 0))
+    });
+  });
+
+  app.post("/login/dispositivo/encerrar", (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const pending = pendingLoginIsValid(req) ? req.session.pendingLogin : null;
+    if (!pending || pending.requiresCode) {
+      delete req.session.pendingLogin;
+      req.flash("error", "A verificacao expirou. Entre novamente.");
+      return res.redirect("/login");
+    }
+    const user = data.users.find((item) => item.id === pending.userId && item.status === "active");
+    if (!user) {
+      delete req.session.pendingLogin;
+      req.flash("error", "Conta indisponivel.");
+      return res.redirect("/login");
+    }
+    finishLogin(req, user, data, { replaced: true });
+    store.write(data);
+    req.flash("success", "Sessao anterior encerrada. Acesso liberado neste dispositivo.");
+    return res.redirect(["admin", "super_admin"].includes(user.role) ? "/admin" : "/app");
+  });
+
+  app.post("/login/dispositivo/codigo", (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const pending = pendingLoginIsValid(req) ? req.session.pendingLogin : null;
+    const code = onlyDigits(req.body.code).slice(0, 6);
+    if (!pending || !pending.requiresCode) {
+      delete req.session.pendingLogin;
+      req.flash("error", "A verificacao expirou. Entre novamente.");
+      return res.redirect("/login");
+    }
+    const user = data.users.find((item) => item.id === pending.userId && item.status === "active");
+    if (!user) {
+      delete req.session.pendingLogin;
+      req.flash("error", "Conta indisponivel.");
+      return res.redirect("/login");
+    }
+    pending.attempts = Number(pending.attempts || 0);
+    if (pending.attempts >= 5) {
+      delete req.session.pendingLogin;
+      req.flash("error", "Muitas tentativas de codigo. Entre novamente.");
+      return res.redirect("/login");
+    }
+    if (code.length !== 6 || pending.codeHash !== recoveryCodeHash(pending.token, code)) {
+      pending.attempts += 1;
+      req.flash("error", "Codigo invalido.");
+      return res.redirect("/login/dispositivo");
+    }
+    finishLogin(req, user, data, { replaced: true });
+    audit(data, user.id, "auth.login_code_verified", "users", null, { device: currentDeviceLabel(req) }, req);
+    store.write(data);
+    req.flash("success", "Codigo confirmado. Sessao anterior encerrada.");
     return res.redirect(["admin", "super_admin"].includes(user.role) ? "/admin" : "/app");
   });
 
   app.post("/logout", (req, res) => {
+    const sessionUserId = req.session.userId;
+    const sessionToken = req.session.activeSessionToken;
+    if (sessionUserId && sessionToken) {
+      const data = store.read();
+      normalizeData(data);
+      const user = data.users.find((item) => item.id === sessionUserId);
+      if (user && user.activeSessionToken === sessionToken) {
+        user.activeSessionToken = null;
+        user.activeSessionStartedAt = null;
+        user.activeSessionLastSeenAt = null;
+        user.activeSessionExpiresAt = null;
+        user.activeSessionDevice = null;
+        audit(data, user.id, "auth.logout", "users", null, { id: user.id }, req);
+        store.write(data);
+      }
+    }
     req.session.destroy(() => res.redirect("/"));
   });
 
