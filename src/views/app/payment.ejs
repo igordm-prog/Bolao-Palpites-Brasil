@@ -38,9 +38,6 @@
         <small>Valido ate <%= formatDateTime(payment.pixExpirationDate) %></small>
       <% } %>
     </div>
-    <% if (payment.invoiceUrl) { %>
-      <a class="button" href="<%= payment.invoiceUrl %>" target="_blank" rel="noopener">Abrir cobranca no Asaas</a>
-    <% } %>
     <p class="muted">Quando o pagamento for confirmado pelo Asaas, o valor entra automaticamente na sua carteira. A entrada do bolao sera descontada quando voce escolher participar.</p>
   <% } else { %>
     <p class="muted">Esta entrada foi paga com saldo da carteira.</p>
