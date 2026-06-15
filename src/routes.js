@@ -141,6 +141,7 @@ function finishLogin(req, user, data, options = {}) {
   );
   req.session.userId = user.id;
   req.session.activeSessionToken = sessionToken;
+  req.session.lastActivityAt = user.lastLoginAt;
   delete req.session.pendingLogin;
   audit(data, user.id, options.replaced ? "auth.session_replaced" : "auth.login_success", "users", null, {
     lastLoginAt: user.lastLoginAt,

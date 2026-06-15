@@ -9,8 +9,10 @@ const {
   labelForRole,
   labelForStatus,
   labelForTableName,
-  publicUser
+  publicUser,
+  todayIso
 } = require("../utils");
+const { audit } = require("../services/audit");
 
 function crestSlug(name = "") {
   return String(name)
@@ -22,6 +24,24 @@ function crestSlug(name = "") {
 }
 
 const crestDir = path.join(__dirname, "..", "..", "public", "img", "crests");
+const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+function clearSessionFields(req) {
+  delete req.session.userId;
+  delete req.session.activeSessionToken;
+  delete req.session.lastActivityAt;
+  delete req.session.pendingWithdrawal;
+  delete req.session.pendingLogin;
+}
+
+function clearUserActiveSession(user, sessionToken) {
+  if (!user || user.activeSessionToken !== sessionToken) return;
+  user.activeSessionToken = null;
+  user.activeSessionStartedAt = null;
+  user.activeSessionLastSeenAt = null;
+  user.activeSessionExpiresAt = null;
+  user.activeSessionDevice = null;
+}
 
 function buildNotifications(data, user, req) {
   if (!user) return [];
@@ -78,17 +98,44 @@ function buildNotifications(data, user, req) {
 function attachLocals(store) {
   return (req, res, next) => {
     const data = store.read();
-    const user = data.users.find((item) => item.id === req.session.userId);
+    let user = data.users.find((item) => item.id === req.session.userId);
+    if (user && !req.session.activeSessionToken && req.path !== "/logout") {
+      clearSessionFields(req);
+      req.flash("error", "Sua sessao expirou. Entre novamente.");
+      user = null;
+      if (req.path !== "/login") return res.redirect("/login");
+    }
+    if (user && req.session.activeSessionToken === user.activeSessionToken && req.session.lastActivityAt) {
+      const inactiveFor = Date.now() - new Date(req.session.lastActivityAt).getTime();
+      if (inactiveFor > SESSION_IDLE_TIMEOUT_MS) {
+        clearUserActiveSession(user, req.session.activeSessionToken);
+        audit(data, user.id, "auth.session_expired", "users", null, { inactiveForMs: inactiveFor }, req);
+        store.write(data);
+        clearSessionFields(req);
+        req.flash("error", "Sessao expirada por inatividade. Entre novamente.");
+        user = null;
+        if (req.path !== "/login") return res.redirect("/login");
+      }
+    }
+    if (user && req.session.activeSessionToken && !user.activeSessionToken && req.path !== "/logout") {
+      clearSessionFields(req);
+      req.flash("error", "Sua sessao expirou. Entre novamente.");
+      user = null;
+      if (req.path !== "/login") return res.redirect("/login");
+    }
     if (user && user.activeSessionToken && req.session.activeSessionToken !== user.activeSessionToken && req.path !== "/logout") {
-      delete req.session.userId;
-      delete req.session.activeSessionToken;
-      delete req.session.pendingWithdrawal;
+      clearSessionFields(req);
       req.flash("error", "Sua conta foi acessada em outro dispositivo e esta sessao foi encerrada.");
       return res.redirect("/login");
     }
     if (!user && req.session.userId) {
-      delete req.session.userId;
-      delete req.session.activeSessionToken;
+      clearSessionFields(req);
+    }
+    if (user && req.session.activeSessionToken === user.activeSessionToken) {
+      const now = todayIso();
+      req.session.lastActivityAt = now;
+      user.activeSessionLastSeenAt = now;
+      store.write(data);
     }
     const navPool =
       data.pools.find((pool) => pool.status === "open") ||

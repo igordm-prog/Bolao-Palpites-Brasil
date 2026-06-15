@@ -181,6 +181,7 @@ function labelForAuditAction(action) {
     "auth.concurrent_login_attempt": "Login em outro dispositivo",
     "auth.login_code_verified": "Codigo de acesso validado",
     "auth.session_replaced": "Sessao substituida",
+    "auth.session_expired": "Sessao expirada por inatividade",
     "auth.logout": "Logout realizado",
     "auth.password_reset_requested": "Redefinicao solicitada",
     "auth.password_reset_completed": "Senha redefinida",
