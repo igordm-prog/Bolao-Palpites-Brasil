@@ -1811,6 +1811,106 @@ select.is-invalid + .field-error {
   border-radius: 8px;
 }
 
+.sofascore-cache-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sofascore-cache-head h3,
+.sofascore-cache-head p {
+  margin: 0;
+}
+
+.sofascore-cache-head p {
+  margin-top: 4px;
+}
+
+.sofascore-game-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.sofascore-game-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(32, 199, 79, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(24, 185, 61, 0.08), rgba(255, 255, 255, 0.035));
+}
+
+.sofascore-game-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sofascore-game-title strong {
+  font-size: 1rem;
+}
+
+.sofascore-game-metrics,
+.sofascore-stats-row {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.sofascore-game-metrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sofascore-stats-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.sofascore-game-metrics div,
+.sofascore-stats-row div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.sofascore-game-metrics dt,
+.sofascore-stats-row dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.sofascore-game-metrics dd,
+.sofascore-stats-row dd {
+  margin: 2px 0 0;
+  font-weight: 900;
+}
+
+.sofascore-odds-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sofascore-odds-row span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 203, 50, 0.22);
+  border-radius: 7px;
+  color: var(--muted);
+  background: rgba(255, 203, 50, 0.06);
+}
+
+.sofascore-odds-row strong {
+  color: var(--text);
+}
+
 .compact-list {
   display: grid;
   gap: 8px;
@@ -3487,6 +3587,17 @@ th {
 }
 
 @media (max-width: 760px) {
+  .sofascore-cache-head,
+  .sofascore-game-title {
+    display: grid;
+  }
+
+  .sofascore-game-metrics,
+  .sofascore-stats-row,
+  .sofascore-odds-row {
+    grid-template-columns: 1fr;
+  }
+
   .live-entry-stats,
   .live-signal-metrics {
     grid-template-columns: 1fr;

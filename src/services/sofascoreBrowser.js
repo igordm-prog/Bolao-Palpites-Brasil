@@ -68,14 +68,14 @@ function inferGamesFromLines(lines) {
 
 function gameStatusLabel(status) {
   if (!status || status === "-") return "Agendado";
-  if (/^\d+'$/.test(status)) return "Ao vivo";
+  if (/^\d{1,3}'?$/.test(status)) return "Ao vivo";
   if (status === "HT" || status === "INT") return "Intervalo";
   if (status === "FT") return "Finalizado";
   return status;
 }
 
 function minuteFromStatus(status) {
-  const match = String(status || "").match(/^(\d{1,3})'$/);
+  const match = String(status || "").match(/^(\d{1,3})'?$/);
   return match ? Number(match[1]) : 0;
 }
 

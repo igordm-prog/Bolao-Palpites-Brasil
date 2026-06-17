@@ -29,6 +29,15 @@
     </form>
 
     <% if (latestSnapshot) { %>
+      <%
+        const allGames = latestSnapshot.games || [];
+        const liveGames = allGames.filter((game) => {
+          const status = String(game.status || "").trim();
+          const statusLabel = String(game.statusLabel || "").trim();
+          return ["Ao vivo", "Intervalo"].includes(statusLabel) || /^\d{1,3}'?$/.test(status) || ["HT", "INT"].includes(status.toUpperCase());
+        });
+        const hiddenGamesCount = Math.max(0, allGames.length - liveGames.length);
+      %>
       <section class="panel sofascore-result <%= latestSnapshot.ok ? 'is-ok' : 'is-error' %>">
         <div class="account-section-head">
           <div>
@@ -49,8 +58,9 @@
             <small>caracteres visiveis</small>
           </article>
           <article>
-            <span>Jogos em cache</span>
-            <strong><%= latestSnapshot.gamesCount || latestSnapshot.games?.length || 0 %></strong>
+            <span>Jogos ao vivo</span>
+            <strong><%= liveGames.length %></strong>
+            <small>de <%= latestSnapshot.gamesCount || allGames.length || 0 %> capturados</small>
           </article>
         </div>
 
@@ -66,19 +76,65 @@
           </article>
 
           <article>
-            <h3>Jogos salvos no cache</h3>
-            <% if (latestSnapshot.games?.length) { %>
-              <ul class="compact-list sofascore-game-cache-list">
-                <% latestSnapshot.games.forEach((game) => { %>
-                  <li>
-                    <strong><%= game.homeTeam %> x <%= game.awayTeam %></strong>
-                    <span class="muted"><%= game.competition || "SofaScore" %><%= game.group ? ` - ${game.group}` : "" %></span>
-                    <span class="muted">Horario <%= game.time || "-" %> | Status <%= game.status || "-" %> | Minuto <%= game.minute || 0 %> | Placar <%= game.score || "-" %></span>
-                    <span class="muted">Odds 1X2: 1 <%= game.odds1x2?.home || "-" %> | X <%= game.odds1x2?.draw || "-" %> | 2 <%= game.odds1x2?.away || "-" %></span>
-                    <span class="muted">Stats base: <%= game.stats?.totalShots || 0 %> finalizacoes, <%= game.stats?.shotsOnTarget || 0 %> no alvo, <%= game.stats?.corners || 0 %> escanteios, <%= game.stats?.dangerousAttacks || 0 %> ataques perigosos</span>
-                  </li>
+            <div class="sofascore-cache-head">
+              <div>
+                <h3>Jogos ao vivo no cache</h3>
+                <p class="muted">Usados no funil de entradas ao vivo.</p>
+              </div>
+              <% if (hiddenGamesCount) { %>
+                <span class="badge"><%= hiddenGamesCount %> agendados/finalizados ocultos</span>
+              <% } %>
+            </div>
+            <% if (liveGames.length) { %>
+              <div class="sofascore-game-grid">
+                <% liveGames.forEach((game) => {
+                  const stats = game.stats || {};
+                  const statsTotal = Number(stats.totalShots || 0) + Number(stats.shotsOnTarget || 0) + Number(stats.corners || 0) + Number(stats.dangerousAttacks || 0);
+                  const hasOdds = game.odds1x2 && (game.odds1x2.home || game.odds1x2.draw || game.odds1x2.away);
+                  const displayStatus = ["Ao vivo", "Intervalo"].includes(game.statusLabel) || /^\d{1,3}'?$/.test(String(game.status || "")) || /^\d{1,3}'?$/.test(String(game.statusLabel || "")) ? "Ao vivo" : game.statusLabel || game.status || "Ao vivo";
+                %>
+                  <div class="sofascore-game-card">
+                    <div class="sofascore-game-title">
+                      <strong><%= game.homeTeam %> x <%= game.awayTeam %></strong>
+                      <span class="badge paid"><%= displayStatus %></span>
+                    </div>
+                    <p class="muted"><%= game.competition || "SofaScore" %><%= game.group ? ` - ${game.group}` : "" %></p>
+                    <dl class="sofascore-game-metrics">
+                      <div>
+                        <dt>Horario</dt>
+                        <dd><%= game.time || "-" %></dd>
+                      </div>
+                      <div>
+                        <dt>Minuto</dt>
+                        <dd><%= game.minute || "-" %></dd>
+                      </div>
+                      <div>
+                        <dt>Placar</dt>
+                        <dd><%= game.score || "-" %></dd>
+                      </div>
+                    </dl>
+                    <% if (hasOdds) { %>
+                      <div class="sofascore-odds-row">
+                        <span>1 <strong><%= game.odds1x2.home || "-" %></strong></span>
+                        <span>X <strong><%= game.odds1x2.draw || "-" %></strong></span>
+                        <span>2 <strong><%= game.odds1x2.away || "-" %></strong></span>
+                      </div>
+                    <% } %>
+                    <% if (statsTotal > 0) { %>
+                      <dl class="sofascore-stats-row">
+                        <div><dt>Finalizacoes</dt><dd><%= stats.totalShots || 0 %></dd></div>
+                        <div><dt>No alvo</dt><dd><%= stats.shotsOnTarget || 0 %></dd></div>
+                        <div><dt>Escanteios</dt><dd><%= stats.corners || 0 %></dd></div>
+                        <div><dt>Ataques</dt><dd><%= stats.dangerousAttacks || 0 %></dd></div>
+                      </dl>
+                    <% } else { %>
+                      <p class="muted">Estatisticas reais ainda nao disponiveis para esta partida.</p>
+                    <% } %>
+                  </div>
                 <% }) %>
-              </ul>
+              </div>
+            <% } else if (allGames.length) { %>
+              <p class="muted">A leitura capturou <%= allGames.length %> jogos, mas nenhum estava ao vivo. Eles ficaram fora do funil.</p>
             <% } else { %>
               <p class="muted">Nenhum jogo estruturado foi salvo. Confira as linhas brutas abaixo.</p>
             <% } %>

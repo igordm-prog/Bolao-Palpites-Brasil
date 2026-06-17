@@ -408,7 +408,7 @@ function snapshot() {
 
 function dashboardFromSofaScoreSnapshot(snapshot) {
   if (!snapshot) return null;
-  const matches = (snapshot.games || []).map((game) => {
+  const matches = (snapshot.games || []).filter(isSofaScoreLiveGame).map((game) => {
     const minute = Number(game.minute || 0);
     const homeScore = Number(game.homeScore ?? 0);
     const awayScore = Number(game.awayScore ?? 0);
@@ -425,7 +425,7 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
       startsAt: snapshot.finishedAt || game.capturedAt || new Date().toISOString(),
       source: "browser_sofascore"
     });
-    match.status = game.statusLabel || match.status;
+    match.status = sofaScoreDisplayStatus(game) || match.status;
     match.sofaScoreStatus = game.status || null;
     match.scoreboard = game.score || match.scoreboard;
     match.odds1x2 = game.odds1x2 || null;
@@ -453,6 +453,26 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
       bestScore: matches.reduce((highest, match) => Math.max(highest, match.funnelScore), 0)
     }
   };
+}
+
+function isSofaScoreLiveGame(game = {}) {
+  const status = String(game.status || "").trim();
+  const statusLabel = String(game.statusLabel || "").trim();
+  if (["Ao vivo", "Intervalo"].includes(statusLabel)) return true;
+  if (/^\d{1,3}'?$/.test(status)) return true;
+  if (["HT", "INT"].includes(status.toUpperCase())) return true;
+  return false;
+}
+
+function sofaScoreDisplayStatus(game = {}) {
+  const status = String(game.status || "").trim();
+  const statusLabel = String(game.statusLabel || "").trim();
+  if (["Ao vivo", "Intervalo", "Finalizado", "Agendado"].includes(statusLabel)) return statusLabel;
+  if (/^\d{1,3}'?$/.test(status) || /^\d{1,3}'?$/.test(statusLabel)) return "Ao vivo";
+  if (["HT", "INT"].includes(status.toUpperCase()) || ["HT", "INT"].includes(statusLabel.toUpperCase())) return "Intervalo";
+  if (status.toUpperCase() === "FT" || statusLabel.toUpperCase() === "FT") return "Finalizado";
+  if (!status || status === "-") return "Agendado";
+  return statusLabel || status;
 }
 
 function emptyStats() {
@@ -496,5 +516,6 @@ module.exports = {
   betanoEntryLink,
   dashboardFromSofaScoreSnapshot,
   getLiveEntriesDashboard,
+  isSofaScoreLiveGame,
   refreshLiveEntries
 };

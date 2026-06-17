@@ -5,7 +5,7 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
-const { dashboardFromSofaScoreSnapshot, getLiveEntriesDashboard, refreshLiveEntries } = require("./services/liveEntries");
+const { dashboardFromSofaScoreSnapshot, getLiveEntriesDashboard, isSofaScoreLiveGame, refreshLiveEntries } = require("./services/liveEntries");
 const { runSofaScoreBrowserProbe } = require("./services/sofascoreBrowser");
 const {
   isEmailEnabled,
@@ -168,6 +168,7 @@ function normalizeData(data) {
     snapshot.lines ||= [];
     snapshot.createdAt ||= snapshot.finishedAt || todayIso();
     snapshot.gamesCount = Number(snapshot.gamesCount ?? snapshot.games.length);
+    snapshot.liveGamesCount = Number(snapshot.liveGamesCount ?? snapshot.games.filter(isSofaScoreLiveGame).length);
   });
   data.users.forEach((user) => {
     user.walletBalance = Number(user.walletBalance || 0);
@@ -189,6 +190,28 @@ function latestSofaScoreSnapshot(data, options = {}) {
 }
 
 function saveSofaScoreSnapshot(data, store, result, userId) {
+  const games = (result.games || []).map((game, index) => ({
+    id: `${Date.now()}-${index + 1}`,
+    eventId: game.eventId || null,
+    competition: game.competition || null,
+    group: game.group || null,
+    time: game.time,
+    status: game.status,
+    statusLabel: game.statusLabel || null,
+    minute: Number(game.minute || 0),
+    homeTeam: game.homeTeam,
+    awayTeam: game.awayTeam,
+    homeScore: game.homeScore,
+    awayScore: game.awayScore,
+    score: game.score || null,
+    odds1x2: game.odds1x2 || null,
+    liveOdd: game.liveOdd || null,
+    href: game.href || null,
+    stats: game.stats || null,
+    rawText: game.rawText || null,
+    rawLines: game.rawLines || [],
+    capturedAt: result.finishedAt
+  }));
   const snapshot = {
     id: store.nextId(data, "sofascoreSnapshots"),
     ok: Boolean(result.ok),
@@ -201,29 +224,9 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     createdAt: todayIso(),
     createdBy: userId,
     textLength: Number(result.textLength || 0),
-    gamesCount: Array.isArray(result.games) ? result.games.length : 0,
-    games: (result.games || []).map((game, index) => ({
-      id: `${Date.now()}-${index + 1}`,
-      eventId: game.eventId || null,
-      competition: game.competition || null,
-      group: game.group || null,
-      time: game.time,
-      status: game.status,
-      statusLabel: game.statusLabel || null,
-      minute: Number(game.minute || 0),
-      homeTeam: game.homeTeam,
-      awayTeam: game.awayTeam,
-      homeScore: game.homeScore,
-      awayScore: game.awayScore,
-      score: game.score || null,
-      odds1x2: game.odds1x2 || null,
-      liveOdd: game.liveOdd || null,
-      href: game.href || null,
-      stats: game.stats || null,
-      rawText: game.rawText || null,
-      rawLines: game.rawLines || [],
-      capturedAt: result.finishedAt
-    })),
+    gamesCount: games.length,
+    liveGamesCount: games.filter(isSofaScoreLiveGame).length,
+    games,
     lines: (result.lines || []).slice(0, 160),
     error: result.error || null
   };
