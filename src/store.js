@@ -17,6 +17,7 @@ const initialData = {
   payments: [],
   guesses: [],
   passwordResets: [],
+  liveEntries: [],
   auditLogs: []
 };
 
@@ -28,6 +29,7 @@ const collectionNames = [
   "payments",
   "guesses",
   "passwordResets",
+  "liveEntries",
   "auditLogs"
 ];
 

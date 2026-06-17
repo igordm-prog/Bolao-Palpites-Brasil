@@ -5,7 +5,7 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
-const { getLiveEntriesDashboard, refreshLiveEntries } = require("./services/liveEntries");
+const { getLiveEntriesDashboard, mergeManualEntries, refreshLiveEntries } = require("./services/liveEntries");
 const {
   isEmailEnabled,
   sendEmailVerificationCode,
@@ -160,6 +160,7 @@ function normalizeData(data) {
   data.settings.withdrawalMinimum = 20;
   data.payments ||= [];
   data.participations ||= [];
+  data.liveEntries ||= [];
   data.users.forEach((user) => {
     user.walletBalance = Number(user.walletBalance || 0);
     user.emailVerifiedAt ||= null;
@@ -169,6 +170,14 @@ function normalizeData(data) {
   data.payments.forEach((payment) => {
     payment.type ||= payment.poolId ? "pool_entry" : "deposit";
     payment.amount = Number(payment.amount || 0);
+  });
+  data.liveEntries.forEach((entry) => {
+    entry.status ||= "active";
+    entry.stats ||= {};
+    entry.minute = Number(entry.minute || 0);
+    entry.homeScore = Number(entry.homeScore || 0);
+    entry.awayScore = Number(entry.awayScore || 0);
+    entry.liveOdd = Number(entry.liveOdd || 0);
   });
 }
 
@@ -940,18 +949,115 @@ function router(store) {
     const data = store.read();
     normalizeData(data);
     const user = getCurrentUser(data, req);
-    const liveEntries = await getLiveEntriesDashboard();
-    res.render("app/live-entries", { title: "Entradas ao vivo", user, liveEntries });
+    const liveEntries = mergeManualEntries(await getLiveEntriesDashboard(), data.liveEntries);
+    res.render("app/live-entries", {
+      title: "Entradas ao vivo",
+      user,
+      liveEntries,
+      canManageLiveEntries: ["admin", "super_admin"].includes(user.role),
+      sofaScoreUrl: process.env.SOFASCORE_SITE_URL || "https://www.sofascore.com/pt/"
+    });
   });
 
   app.get("/app/entradas-ao-vivo/dados", requireAuth, async (req, res) => {
-    const liveEntries = await getLiveEntriesDashboard({ maxAgeMs: 5000 });
+    const data = store.read();
+    normalizeData(data);
+    const liveEntries = mergeManualEntries(await getLiveEntriesDashboard(), data.liveEntries);
     res.json(liveEntries);
   });
 
   app.post("/app/entradas-ao-vivo/atualizar", requireAuth, async (req, res) => {
-    const liveEntries = await refreshLiveEntries();
+    const data = store.read();
+    normalizeData(data);
+    const liveEntries = mergeManualEntries(await refreshLiveEntries(), data.liveEntries);
     res.json(liveEntries);
+  });
+
+  app.post("/app/entradas-ao-vivo/manual", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const numberField = (name, fallback = 0) => {
+      const parsed = Number(String(req.body[name] ?? "").replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const league = String(req.body.league || "").trim() || "Campeonato";
+    const homeTeam = String(req.body.homeTeam || "").trim();
+    const awayTeam = String(req.body.awayTeam || "").trim();
+    const minute = numberField("minute");
+    const homeScore = numberField("homeScore");
+    const awayScore = numberField("awayScore");
+    const liveOdd = numberField("liveOdd");
+    const referenceUrl = String(req.body.referenceUrl || "").trim();
+
+    if (!homeTeam || !awayTeam || homeTeam === awayTeam) {
+      req.flash("error", "Informe mandante e visitante validos e diferentes.");
+      return res.redirect("/app/entradas-ao-vivo");
+    }
+    if (!Number.isInteger(minute) || minute < 1 || minute > 130) {
+      req.flash("error", "Informe um minuto valido do jogo.");
+      return res.redirect("/app/entradas-ao-vivo");
+    }
+    if (!Number.isInteger(homeScore) || !Number.isInteger(awayScore) || homeScore < 0 || awayScore < 0) {
+      req.flash("error", "Informe um placar valido.");
+      return res.redirect("/app/entradas-ao-vivo");
+    }
+    if (liveOdd && (liveOdd < 1 || liveOdd > 20)) {
+      req.flash("error", "Informe uma odd valida ou deixe em branco.");
+      return res.redirect("/app/entradas-ao-vivo");
+    }
+    if (referenceUrl && !/^https?:\/\//i.test(referenceUrl)) {
+      req.flash("error", "Informe um link de referencia valido.");
+      return res.redirect("/app/entradas-ao-vivo");
+    }
+
+    const entry = {
+      id: store.nextId(data, "liveEntries"),
+      league,
+      homeTeam,
+      awayTeam,
+      minute,
+      homeScore,
+      awayScore,
+      liveOdd,
+      stats: {
+        totalShots: Math.max(0, numberField("totalShots")),
+        shotsOnTarget: Math.max(0, numberField("shotsOnTarget")),
+        corners: Math.max(0, numberField("corners")),
+        dangerousAttacks: Math.max(0, numberField("dangerousAttacks")),
+        possessionHome: Math.max(0, Math.min(100, numberField("possessionHome", 50))),
+        yellowCards: Math.max(0, numberField("yellowCards")),
+        redCards: Math.max(0, numberField("redCards"))
+      },
+      referenceUrl,
+      status: "active",
+      createdBy: user.id,
+      createdAt: todayIso(),
+      updatedAt: todayIso()
+    };
+    data.liveEntries.push(entry);
+    audit(data, user.id, "live_entry.created", "liveEntries", null, entry, req);
+    store.write(data);
+    req.flash("success", "Entrada manual adicionada ao monitoramento.");
+    return res.redirect("/app/entradas-ao-vivo");
+  });
+
+  app.post("/app/entradas-ao-vivo/manual/:id/excluir", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const entry = data.liveEntries.find((item) => item.id === Number(req.params.id));
+    if (!entry || entry.status === "archived") {
+      req.flash("error", "Entrada manual nao encontrada.");
+      return res.redirect("/app/entradas-ao-vivo");
+    }
+    const before = { status: entry.status };
+    entry.status = "archived";
+    entry.updatedAt = todayIso();
+    audit(data, user.id, "live_entry.archived", "liveEntries", before, entry, req);
+    store.write(data);
+    req.flash("success", "Entrada manual removida.");
+    return res.redirect("/app/entradas-ao-vivo");
   });
 
   app.get("/app/conta", requireAuth, (req, res) => {

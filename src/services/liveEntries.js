@@ -333,6 +333,57 @@ function buildMatch(input) {
   };
 }
 
+function buildManualLiveEntryMatch(entry) {
+  const stats = {
+    ...emptyStats(),
+    ...(entry.stats || {})
+  };
+  const minute = Number(entry.minute || 0);
+  const homeScore = Number(entry.homeScore || 0);
+  const awayScore = Number(entry.awayScore || 0);
+  const liveOdd = Number(entry.liveOdd || 0) || estimateOver15Odd(minute, homeScore + awayScore);
+  const match = buildMatch({
+    id: `manual-${entry.id}`,
+    league: entry.league || "Campeonato",
+    homeTeam: entry.homeTeam || "Mandante",
+    awayTeam: entry.awayTeam || "Visitante",
+    minute,
+    homeScore,
+    awayScore,
+    liveOdd,
+    stats,
+    startsAt: entry.createdAt || new Date().toISOString(),
+    source: "manual"
+  });
+  match.manualEntryId = entry.id;
+  match.referenceUrl = entry.referenceUrl || null;
+  if (match.referenceUrl) match.link = match.referenceUrl;
+  return match;
+}
+
+function mergeManualEntries(dashboard, entries = []) {
+  const manualMatches = entries
+    .filter((entry) => entry && entry.status !== "archived")
+    .map(buildManualLiveEntryMatch);
+  const matches = [...manualMatches, ...(dashboard.matches || [])].sort((a, b) => b.funnelScore - a.funnelScore);
+  const signals = matches
+    .filter((match) => match.funnelScore >= 85 && !match.reasons.includes("placar fora da janela"))
+    .sort((a, b) => b.funnelScore - a.funnelScore);
+
+  return {
+    ...dashboard,
+    manualCount: manualMatches.length,
+    matches,
+    signals,
+    stats: {
+      matches: matches.length,
+      live: matches.filter((match) => match.status !== "Finalizado").length,
+      signals: signals.length,
+      bestScore: matches.reduce((highest, match) => Math.max(highest, match.funnelScore), 0)
+    }
+  };
+}
+
 function liveFunnelScore(match) {
   let score = 0;
   const reasons = [];
@@ -446,5 +497,6 @@ function normalizeText(value = "") {
 module.exports = {
   betanoEntryLink,
   getLiveEntriesDashboard,
+  mergeManualEntries,
   refreshLiveEntries
 };
