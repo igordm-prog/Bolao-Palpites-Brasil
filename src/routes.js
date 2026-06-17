@@ -162,6 +162,13 @@ function normalizeData(data) {
   data.settings.sofascoreBrowserLastResult ||= null;
   data.payments ||= [];
   data.participations ||= [];
+  data.sofascoreSnapshots ||= [];
+  data.sofascoreSnapshots.forEach((snapshot) => {
+    snapshot.games ||= [];
+    snapshot.lines ||= [];
+    snapshot.createdAt ||= snapshot.finishedAt || todayIso();
+    snapshot.gamesCount = Number(snapshot.gamesCount ?? snapshot.games.length);
+  });
   data.users.forEach((user) => {
     user.walletBalance = Number(user.walletBalance || 0);
     user.emailVerifiedAt ||= null;
@@ -172,6 +179,48 @@ function normalizeData(data) {
     payment.type ||= payment.poolId ? "pool_entry" : "deposit";
     payment.amount = Number(payment.amount || 0);
   });
+}
+
+function latestSofaScoreSnapshot(data) {
+  return (data.sofascoreSnapshots || [])
+    .slice()
+    .sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime())[0] || null;
+}
+
+function saveSofaScoreSnapshot(data, store, result, userId) {
+  const snapshot = {
+    id: store.nextId(data, "sofascoreSnapshots"),
+    ok: Boolean(result.ok),
+    provider: result.provider,
+    sourceUrl: result.url,
+    currentUrl: result.currentUrl,
+    title: result.title,
+    startedAt: result.startedAt,
+    finishedAt: result.finishedAt,
+    createdAt: todayIso(),
+    createdBy: userId,
+    textLength: Number(result.textLength || 0),
+    gamesCount: Array.isArray(result.games) ? result.games.length : 0,
+    games: (result.games || []).map((game, index) => ({
+      id: `${Date.now()}-${index + 1}`,
+      time: game.time,
+      status: game.status,
+      homeTeam: game.homeTeam,
+      awayTeam: game.awayTeam,
+      score: game.score || null,
+      capturedAt: result.finishedAt
+    })),
+    lines: (result.lines || []).slice(0, 160),
+    error: result.error || null
+  };
+  data.sofascoreSnapshots.push(snapshot);
+  data.sofascoreSnapshots = data.sofascoreSnapshots
+    .slice()
+    .sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime())
+    .slice(0, 30)
+    .sort((a, b) => a.id - b.id);
+  data.settings.sofascoreBrowserLastResult = result;
+  return snapshot;
 }
 
 function poolFinancials(data, pool) {
@@ -1659,9 +1708,14 @@ function router(store) {
   app.get("/admin/sofascore-robo", requireAuth, requireAdmin, (req, res) => {
     const data = store.read();
     normalizeData(data);
+    const snapshots = (data.sofascoreSnapshots || [])
+      .slice()
+      .sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime());
     res.render("admin/sofascore-browser", {
       title: "Robo SofaScore",
       lastResult: data.settings.sofascoreBrowserLastResult,
+      latestSnapshot: snapshots[0] || latestSofaScoreSnapshot(data),
+      snapshots: snapshots.slice(0, 10),
       defaultUrl: process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/"
     });
   });
@@ -1676,15 +1730,16 @@ function router(store) {
       return res.redirect("/admin/sofascore-robo");
     }
     const result = await runSofaScoreBrowserProbe({ url });
-    data.settings.sofascoreBrowserLastResult = result;
-    audit(data, user.id, "sofascore_browser.probe_run", "settings", null, {
+    const snapshot = saveSofaScoreSnapshot(data, store, result, user.id);
+    audit(data, user.id, "sofascore_browser.cache_updated", "sofascoreSnapshots", null, {
       ok: result.ok,
       url: result.url,
       games: result.games.length,
+      snapshotId: snapshot.id,
       error: result.error
     }, req);
     store.write(data);
-    req.flash(result.ok ? "success" : "error", result.ok ? "Teste executado. Confira o resultado abaixo." : `Teste falhou: ${result.error}`);
+    req.flash(result.ok ? "success" : "error", result.ok ? "Cache do monitor atualizado. Confira os jogos salvos abaixo." : `Monitor falhou: ${result.error}`);
     return res.redirect("/admin/sofascore-robo");
   });
 

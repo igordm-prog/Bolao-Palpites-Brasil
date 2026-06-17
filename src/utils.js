@@ -197,6 +197,7 @@ function labelForAuditAction(action) {
     "match.deleted": "Jogo excluido",
     "match.result_entered": "Resultado lancado",
     "sofascore_browser.probe_run": "Teste do robo SofaScore",
+    "sofascore_browser.cache_updated": "Cache SofaScore atualizado",
     "payment.created": "Pagamento criado",
     "payment.status_changed": "Status do pagamento alterado",
     "wallet.deposit_created": "Deposito criado",
@@ -225,6 +226,7 @@ function labelForTableName(tableName) {
     payments: "Pagamentos",
     pools: "Boloes",
     settings: "Configuracoes",
+    sofascoreSnapshots: "Cache SofaScore",
     users: "Usuarios"
   };
   return labels[tableName] || tableName || "-";

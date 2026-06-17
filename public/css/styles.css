@@ -1838,6 +1838,10 @@ select.is-invalid + .field-error {
   color: var(--muted);
 }
 
+.sofascore-history-panel table {
+  min-width: 820px;
+}
+
 .pix-qr {
   width: min(260px, 100%);
   padding: 10px;

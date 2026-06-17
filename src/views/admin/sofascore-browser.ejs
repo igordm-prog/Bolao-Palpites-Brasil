@@ -13,78 +13,107 @@
   <div class="content">
     <div class="section-header">
       <div>
-        <p class="eyebrow">Teste experimental</p>
+        <p class="eyebrow">Monitor experimental</p>
         <h1>Robo SofaScore</h1>
-        <p class="muted">Executa um navegador real no servidor para tentar ler a tela do SofaScore. Use apenas para teste interno.</p>
+        <p class="muted">Executa um navegador real no servidor, le os jogos do SofaScore e salva um cache para o sistema consultar.</p>
       </div>
     </div>
 
     <form class="panel form sofascore-probe-form" action="/admin/sofascore-robo/testar" method="post">
-      <h2>Executar leitura</h2>
+      <h2>Atualizar cache do monitor</h2>
       <label>URL do SofaScore
-        <input type="url" name="url" value="<%= lastResult?.url || defaultUrl %>" required>
+        <input type="url" name="url" value="<%= latestSnapshot?.sourceUrl || lastResult?.url || defaultUrl %>" required>
       </label>
-      <p class="muted">O primeiro teste pode demorar porque o navegador precisa abrir, carregar scripts e esperar a pagina montar.</p>
-      <button class="button" type="submit">Executar teste agora</button>
+      <p class="muted">Por enquanto o monitor roda pelo botao. Depois de validar estabilidade, vamos colocar intervalo automatico.</p>
+      <button class="button" type="submit">Atualizar cache agora</button>
     </form>
 
-    <% if (lastResult) { %>
-      <section class="panel sofascore-result <%= lastResult.ok ? 'is-ok' : 'is-error' %>">
+    <% if (latestSnapshot) { %>
+      <section class="panel sofascore-result <%= latestSnapshot.ok ? 'is-ok' : 'is-error' %>">
         <div class="account-section-head">
           <div>
-            <p class="eyebrow">Ultimo teste</p>
-            <h2><%= lastResult.ok ? "Leitura executada" : "Leitura falhou" %></h2>
+            <p class="eyebrow">Cache atual</p>
+            <h2><%= latestSnapshot.ok ? "Monitor atualizado" : "Monitor com erro" %></h2>
           </div>
-          <span class="badge <%= lastResult.ok ? 'paid' : 'canceled' %>"><%= lastResult.ok ? "OK" : "Erro" %></span>
+          <span class="badge <%= latestSnapshot.ok ? 'paid' : 'canceled' %>"><%= latestSnapshot.ok ? "OK" : "Erro" %></span>
         </div>
 
         <div class="account-stats sofascore-result-stats">
           <article>
             <span>Finalizado em</span>
-            <strong><%= formatDateTime(lastResult.finishedAt) %></strong>
+            <strong><%= formatDateTime(latestSnapshot.finishedAt) %></strong>
           </article>
           <article>
             <span>Texto lido</span>
-            <strong><%= lastResult.textLength || 0 %></strong>
+            <strong><%= latestSnapshot.textLength || 0 %></strong>
             <small>caracteres visiveis</small>
           </article>
           <article>
-            <span>Jogos provaveis</span>
-            <strong><%= lastResult.games?.length || 0 %></strong>
+            <span>Jogos em cache</span>
+            <strong><%= latestSnapshot.gamesCount || latestSnapshot.games?.length || 0 %></strong>
           </article>
         </div>
 
-        <% if (lastResult.error) { %>
-          <div class="flash error"><p><%= lastResult.error %></p></div>
+        <% if (latestSnapshot.error) { %>
+          <div class="flash error"><p><%= latestSnapshot.error %></p></div>
         <% } %>
 
         <div class="sofascore-result-grid">
           <article>
             <h3>Pagina capturada</h3>
-            <p><strong>Titulo:</strong> <%= lastResult.title || "-" %></p>
-            <p><strong>URL:</strong> <%= lastResult.currentUrl || lastResult.url %></p>
+            <p><strong>Titulo:</strong> <%= latestSnapshot.title || "-" %></p>
+            <p><strong>URL:</strong> <%= latestSnapshot.currentUrl || latestSnapshot.sourceUrl %></p>
           </article>
 
           <article>
-            <h3>Jogos provaveis</h3>
-            <% if (lastResult.games?.length) { %>
+            <h3>Jogos salvos no cache</h3>
+            <% if (latestSnapshot.games?.length) { %>
               <ul class="compact-list">
-                <% lastResult.games.forEach((game) => { %>
-                  <li><strong><%= game.homeTeam %> x <%= game.awayTeam %></strong> <span class="muted"><%= game.time %> <%= game.score || "" %></span></li>
+                <% latestSnapshot.games.forEach((game) => { %>
+                  <li><strong><%= game.homeTeam %> x <%= game.awayTeam %></strong> <span class="muted"><%= game.time %> <%= game.status || "" %> <%= game.score || "" %></span></li>
                 <% }) %>
               </ul>
             <% } else { %>
-              <p class="muted">Nenhum jogo estruturado foi identificado. Confira as linhas brutas abaixo.</p>
+              <p class="muted">Nenhum jogo estruturado foi salvo. Confira as linhas brutas abaixo.</p>
             <% } %>
           </article>
         </div>
 
         <details class="sofascore-raw-lines">
           <summary>Ver linhas brutas capturadas</summary>
-          <pre><%= (lastResult.lines || []).slice(0, 120).join("\n") %></pre>
+          <pre><%= (latestSnapshot.lines || []).slice(0, 120).join("\n") %></pre>
         </details>
       </section>
     <% } %>
+
+    <section class="table-panel sofascore-history-panel">
+      <h2>Ultimas leituras salvas</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Status</th>
+            <th>Jogos</th>
+            <th>URL</th>
+            <th>Erro</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (!snapshots.length) { %>
+            <tr><td colspan="5">Nenhuma leitura salva ainda.</td></tr>
+          <% } %>
+          <% snapshots.forEach((snapshot) => { %>
+            <tr>
+              <td><%= formatDateTime(snapshot.finishedAt || snapshot.createdAt) %></td>
+              <td><span class="badge <%= snapshot.ok ? 'paid' : 'canceled' %>"><%= snapshot.ok ? "OK" : "Erro" %></span></td>
+              <td><strong><%= snapshot.gamesCount || snapshot.games?.length || 0 %></strong></td>
+              <td><small><%= snapshot.currentUrl || snapshot.sourceUrl || "-" %></small></td>
+              <td><small><%= snapshot.error || "-" %></small></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
   </div>
 </section>
 <%- include("../partials/footer") %>
