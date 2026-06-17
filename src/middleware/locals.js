@@ -26,6 +26,10 @@ function crestSlug(name = "") {
 const crestDir = path.join(__dirname, "..", "..", "public", "img", "crests");
 const SESSION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
+function isAdminUser(user) {
+  return Boolean(user && ["admin", "super_admin"].includes(user.role));
+}
+
 function clearSessionFields(req) {
   delete req.session.userId;
   delete req.session.activeSessionToken;
@@ -105,7 +109,12 @@ function attachLocals(store) {
       user = null;
       if (req.path !== "/login") return res.redirect("/login");
     }
-    if (user && req.session.activeSessionToken === user.activeSessionToken && req.session.lastActivityAt) {
+    if (
+      user &&
+      !isAdminUser(user) &&
+      req.session.activeSessionToken === user.activeSessionToken &&
+      req.session.lastActivityAt
+    ) {
       const inactiveFor = Date.now() - new Date(req.session.lastActivityAt).getTime();
       if (inactiveFor > SESSION_IDLE_TIMEOUT_MS) {
         clearUserActiveSession(user, req.session.activeSessionToken);
@@ -175,7 +184,7 @@ function attachLocals(store) {
       if (fs.existsSync(path.join(crestDir, `${slug}.webp`))) return `/img/crests/${slug}.webp`;
       return null;
     };
-    res.locals.isAdmin = user && ["admin", "super_admin"].includes(user.role);
+    res.locals.isAdmin = isAdminUser(user);
     next();
   };
 }
