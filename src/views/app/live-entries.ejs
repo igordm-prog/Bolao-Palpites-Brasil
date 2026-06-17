@@ -1,5 +1,5 @@
 <%- include("../partials/head", { title }) %>
-<section class="workspace account-workspace live-entries-page" data-live-entries-page data-can-manage="<%= canManageLiveEntries ? 'true' : 'false' %>">
+<section class="workspace account-workspace live-entries-page" data-live-entries-page>
   <aside class="sidebar account-sidebar">
     <h2>Entradas</h2>
     <a class="active" href="/app/entradas-ao-vivo">Entradas ao vivo</a>
@@ -30,7 +30,6 @@
         </small>
         <div class="account-actions">
           <button class="button small" type="button" data-refresh-live>Atualizar</button>
-          <a class="button secondary small" href="<%= sofaScoreUrl %>" target="_blank" rel="noreferrer">SofaScore</a>
           <a class="button secondary small" href="<%= liveEntries.betanoUrl %>" target="_blank" rel="noreferrer">Betano</a>
         </div>
       </div>
@@ -40,57 +39,6 @@
       <section class="flash error live-error" data-live-error><p><%= liveEntries.error %></p></section>
     <% } else { %>
       <section class="flash error live-error" data-live-error hidden></section>
-    <% } %>
-
-    <% if (canManageLiveEntries) { %>
-      <section class="panel live-manual-panel">
-        <div class="account-section-head">
-          <div>
-            <p class="eyebrow">Modo manual assistido</p>
-            <h2>Adicionar jogo observado</h2>
-            <p class="muted">Abra o SofaScore em outra aba, acompanhe o jogo e lance os dados principais para o funil calcular o score.</p>
-          </div>
-          <a class="button secondary small" href="<%= sofaScoreUrl %>" target="_blank" rel="noreferrer">Abrir SofaScore</a>
-        </div>
-        <form class="live-manual-form" action="/app/entradas-ao-vivo/manual" method="post">
-          <div class="live-manual-grid">
-            <label>Campeonato
-              <input type="text" name="league" placeholder="Ex.: Serie A, Copa do Brasil">
-            </label>
-            <label>Mandante
-              <input type="text" name="homeTeam" placeholder="Time da casa" required>
-            </label>
-            <label>Visitante
-              <input type="text" name="awayTeam" placeholder="Time visitante" required>
-            </label>
-            <label>Minuto
-              <input type="number" name="minute" min="1" max="130" placeholder="27" required>
-            </label>
-            <label>Placar casa
-              <input type="number" name="homeScore" min="0" value="0" required>
-            </label>
-            <label>Placar visitante
-              <input type="number" name="awayScore" min="0" value="0" required>
-            </label>
-            <label>Odd Over 1.5
-              <input type="number" name="liveOdd" min="1" max="20" step="0.01" placeholder="1.85">
-            </label>
-            <label>Link de referencia
-              <input type="url" name="referenceUrl" placeholder="https://www.sofascore.com/pt/...">
-            </label>
-          </div>
-          <div class="live-manual-stats">
-            <label>Finalizacoes <input type="number" name="totalShots" min="0" value="0"></label>
-            <label>No alvo <input type="number" name="shotsOnTarget" min="0" value="0"></label>
-            <label>Escanteios <input type="number" name="corners" min="0" value="0"></label>
-            <label>Ataques perigosos <input type="number" name="dangerousAttacks" min="0" value="0"></label>
-            <label>Posse casa % <input type="number" name="possessionHome" min="0" max="100" value="50"></label>
-            <label>Amarelos <input type="number" name="yellowCards" min="0" value="0"></label>
-            <label>Vermelhos <input type="number" name="redCards" min="0" value="0"></label>
-          </div>
-          <button class="button" type="submit">Adicionar entrada</button>
-        </form>
-      </section>
     <% } %>
 
     <div class="account-stats live-entry-stats">
@@ -145,14 +93,7 @@
             <ul class="live-reasons">
               <% signal.reasons.slice(0, 5).forEach((reason) => { %><li><%= reason %></li><% }) %>
             </ul>
-            <div class="live-table-actions">
-              <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer"><%= signal.source === "manual" && signal.referenceUrl ? "Abrir referencia" : "Abrir na Betano" %></a>
-              <% if (canManageLiveEntries && signal.source === "manual") { %>
-                <form action="/app/entradas-ao-vivo/manual/<%= signal.manualEntryId %>/excluir" method="post">
-                  <button class="button secondary full" type="submit">Remover</button>
-                </form>
-              <% } %>
-            </div>
+            <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer">Abrir na Betano</a>
           </article>
         <% }) %>
       </div>
@@ -179,26 +120,14 @@
           <% } %>
           <% liveEntries.matches.forEach((match) => { %>
             <tr>
-              <td>
-                <strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><br>
-                <small><%= match.minute %>' <% if (match.source === "manual") { %>| Manual<% } %></small>
-              </td>
+              <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><br><small><%= match.minute %>'</small></td>
               <td><%= match.league %></td>
               <td><span class="badge <%= match.funnelScore >= 85 ? 'paid' : 'awaiting' %>"><%= match.status %></span></td>
               <td><%= match.scoreboard %></td>
               <td><strong><%= match.liveOdd %></strong></td>
               <td><span class="live-score-badge table-score"><%= match.funnelScore %></span><br><small><%= match.classification %></small></td>
               <td><strong><%= match.pressure %></strong><br><small><%= match.stats.totalShots %> fin. | <%= match.stats.shotsOnTarget %> alvo | <%= match.stats.corners %> esc.</small></td>
-              <td>
-                <div class="live-table-actions">
-                  <a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer"><%= match.source === "manual" && match.referenceUrl ? "Referencia" : "Betano" %></a>
-                  <% if (canManageLiveEntries && match.source === "manual") { %>
-                    <form action="/app/entradas-ao-vivo/manual/<%= match.manualEntryId %>/excluir" method="post">
-                      <button class="button small secondary" type="submit">Remover</button>
-                    </form>
-                  <% } %>
-                </div>
-              </td>
+              <td><a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">Betano</a></td>
             </tr>
           <% }) %>
         </tbody>
@@ -221,7 +150,6 @@
     const statMatches = root.querySelector("[data-stat-matches]");
     const statSignals = root.querySelector("[data-stat-signals]");
     const statBestScore = root.querySelector("[data-stat-best-score]");
-    const canManage = root.dataset.canManage === "true";
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -231,16 +159,6 @@
         '"': "&quot;",
         "'": "&#039;"
       })[char]);
-    }
-
-    function actionButtons(match, full = false) {
-      const href = escapeHtml(match.link || match.referenceUrl || "#");
-      const label = match.source === "manual" && match.referenceUrl ? "Referencia" : "Betano";
-      const buttonClass = full ? "button full" : "button small secondary";
-      const remove = canManage && match.source === "manual" && match.manualEntryId
-        ? `<form action="/app/entradas-ao-vivo/manual/${Number(match.manualEntryId)}/excluir" method="post"><button class="${buttonClass}" type="submit">Remover</button></form>`
-        : "";
-      return `<div class="live-table-actions"><a class="${buttonClass}" href="${href}" target="_blank" rel="noreferrer">${full && label === "Betano" ? "Abrir na Betano" : label}</a>${remove}</div>`;
     }
 
     function render(data) {
@@ -273,7 +191,7 @@
             <div><dt>Escanteios</dt><dd>${signal.stats.corners}</dd></div>
           </dl>
           <ul class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-          ${actionButtons(signal, true)}
+          <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">Abrir na Betano</a>
         </article>
       `).join("") : `
         <article class="pool-item single live-empty-state">
@@ -286,14 +204,14 @@
 
       matchesBody.innerHTML = data.matches.length ? data.matches.map((match) => `
         <tr>
-          <td><strong>${escapeHtml(match.homeTeam)} x ${escapeHtml(match.awayTeam)}</strong><br><small>${match.minute}'${match.source === "manual" ? " | Manual" : ""}</small></td>
+          <td><strong>${escapeHtml(match.homeTeam)} x ${escapeHtml(match.awayTeam)}</strong><br><small>${match.minute}'</small></td>
           <td>${escapeHtml(match.league)}</td>
           <td><span class="badge ${match.funnelScore >= 85 ? "paid" : "awaiting"}">${escapeHtml(match.status)}</span></td>
           <td>${escapeHtml(match.scoreboard)}</td>
           <td><strong>${escapeHtml(match.liveOdd)}</strong></td>
           <td><span class="live-score-badge table-score">${match.funnelScore}</span><br><small>${escapeHtml(match.classification)}</small></td>
           <td><strong>${escapeHtml(match.pressure)}</strong><br><small>${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.</small></td>
-          <td>${actionButtons(match)}</td>
+          <td><a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">Betano</a></td>
         </tr>
       `).join("") : `<tr><td colspan="8">Nenhum jogo ao vivo encontrado agora.</td></tr>`;
     }

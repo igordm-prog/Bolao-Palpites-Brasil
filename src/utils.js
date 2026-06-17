@@ -196,8 +196,6 @@ function labelForAuditAction(action) {
     "match.created": "Jogo cadastrado",
     "match.deleted": "Jogo excluido",
     "match.result_entered": "Resultado lancado",
-    "live_entry.created": "Entrada ao vivo criada",
-    "live_entry.archived": "Entrada ao vivo removida",
     "payment.created": "Pagamento criado",
     "payment.status_changed": "Status do pagamento alterado",
     "wallet.deposit_created": "Deposito criado",
@@ -219,7 +217,6 @@ function labelForAuditAction(action) {
 function labelForTableName(tableName) {
   const labels = {
     guesses: "Palpites",
-    liveEntries: "Entradas ao vivo",
     matches: "Jogos",
     participants: "Participantes",
     participations: "Participacoes",
