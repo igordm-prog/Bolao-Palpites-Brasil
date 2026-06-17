@@ -5,6 +5,7 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
+const { getLiveEntriesDashboard, refreshLiveEntries } = require("./services/liveEntries");
 const {
   isEmailEnabled,
   sendEmailVerificationCode,
@@ -933,6 +934,24 @@ function router(store) {
         return (order[a.status] ?? 9) - (order[b.status] ?? 9) || new Date(b.deadlineAt) - new Date(a.deadlineAt);
       });
     res.render("app/pools", { title: "Boloes", user, pools });
+  });
+
+  app.get("/app/entradas-ao-vivo", requireAuth, async (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const liveEntries = await getLiveEntriesDashboard();
+    res.render("app/live-entries", { title: "Entradas ao vivo", user, liveEntries });
+  });
+
+  app.get("/app/entradas-ao-vivo/dados", requireAuth, async (req, res) => {
+    const liveEntries = await getLiveEntriesDashboard({ maxAgeMs: 5000 });
+    res.json(liveEntries);
+  });
+
+  app.post("/app/entradas-ao-vivo/atualizar", requireAuth, async (req, res) => {
+    const liveEntries = await refreshLiveEntries();
+    res.json(liveEntries);
   });
 
   app.get("/app/conta", requireAuth, (req, res) => {

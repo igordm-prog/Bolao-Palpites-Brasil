@@ -1,0 +1,238 @@
+<%- include("../partials/head", { title }) %>
+<section class="workspace account-workspace live-entries-page" data-live-entries-page>
+  <aside class="sidebar account-sidebar">
+    <h2>Entradas</h2>
+    <a class="active" href="/app/entradas-ao-vivo">Entradas ao vivo</a>
+    <a href="/app/boloes">Jogos</a>
+    <a href="/app/conta">Conta</a>
+    <a href="/app/historico">Historico</a>
+  </aside>
+
+  <div class="content account-content">
+    <header class="account-hero live-entries-hero">
+      <div>
+        <p class="eyebrow">Over 1.5 gols</p>
+        <h1>Entradas ao vivo</h1>
+        <p>Monitoramento de jogos em andamento com funil estatistico, score de entrada e link manual para Betano.</p>
+        <% if (liveEntries.isDemo) { %>
+          <p class="muted">Configure a chave API_FOOTBALL_KEY para substituir a demonstracao por jogos ao vivo reais.</p>
+        <% } %>
+      </div>
+      <div class="account-wallet live-source-card">
+        <span>Fonte ativa</span>
+        <strong data-provider-label><%= liveEntries.providerLabel %></strong>
+        <small data-last-update>
+          <% if (liveEntries.updatedAt) { %>
+            Atualizado em <%= formatDateTime(liveEntries.updatedAt) %>
+          <% } else { %>
+            Aguardando primeira leitura
+          <% } %>
+        </small>
+        <div class="account-actions">
+          <button class="button small" type="button" data-refresh-live>Atualizar</button>
+          <a class="button secondary small" href="<%= liveEntries.betanoUrl %>" target="_blank" rel="noreferrer">Betano</a>
+        </div>
+      </div>
+    </header>
+
+    <% if (liveEntries.error) { %>
+      <section class="flash error live-error" data-live-error><p><%= liveEntries.error %></p></section>
+    <% } else { %>
+      <section class="flash error live-error" data-live-error hidden></section>
+    <% } %>
+
+    <div class="account-stats live-entry-stats">
+      <article>
+        <span>Jogos monitorados</span>
+        <strong data-stat-matches><%= liveEntries.stats.matches %></strong>
+        <small>ao vivo ou em observacao</small>
+      </article>
+      <article>
+        <span>Sinais encontrados</span>
+        <strong data-stat-signals><%= liveEntries.stats.signals %></strong>
+        <small>score acima de 85</small>
+      </article>
+      <article>
+        <span>Melhor score</span>
+        <strong data-stat-best-score><%= liveEntries.stats.bestScore %></strong>
+        <small>funil Over 1.5</small>
+      </article>
+    </div>
+
+    <section class="account-section">
+      <div class="account-section-head">
+        <div>
+          <p class="eyebrow">Alertas</p>
+          <h2>Entradas encontradas</h2>
+        </div>
+        <span class="muted">Atualiza automaticamente a cada 30s</span>
+      </div>
+      <div class="live-signal-grid" data-signals-list>
+        <% if (!liveEntries.signals.length) { %>
+          <article class="pool-item single live-empty-state">
+            <div>
+              <h3>Nenhuma entrada no funil agora</h3>
+              <p class="muted">Quando um jogo bater os filtros, ele aparecera aqui com odd, motivos e link Betano.</p>
+            </div>
+          </article>
+        <% } %>
+        <% liveEntries.signals.forEach((signal) => { %>
+          <article class="live-signal-card">
+            <div class="live-signal-head">
+              <div>
+                <strong><%= signal.homeTeam %> x <%= signal.awayTeam %></strong>
+                <small><%= signal.league %> | <%= signal.minute %>' | <%= signal.scoreboard %></small>
+              </div>
+              <span class="live-score-badge"><%= signal.funnelScore %></span>
+            </div>
+            <dl class="live-signal-metrics">
+              <div><dt>Odd</dt><dd><%= signal.liveOdd %></dd></div>
+              <div><dt>Finalizacoes</dt><dd><%= signal.stats.totalShots %></dd></div>
+              <div><dt>Escanteios</dt><dd><%= signal.stats.corners %></dd></div>
+            </dl>
+            <ul class="live-reasons">
+              <% signal.reasons.slice(0, 5).forEach((reason) => { %><li><%= reason %></li><% }) %>
+            </ul>
+            <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer">Abrir na Betano</a>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+
+    <section class="table-panel live-matches-panel">
+      <h2>Todos os jogos em monitoramento</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Jogo</th>
+            <th>Campeonato</th>
+            <th>Status</th>
+            <th>Placar</th>
+            <th>Odd</th>
+            <th>Score</th>
+            <th>Ritmo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody data-matches-body>
+          <% if (!liveEntries.matches.length) { %>
+            <tr><td colspan="8">Nenhum jogo ao vivo encontrado agora.</td></tr>
+          <% } %>
+          <% liveEntries.matches.forEach((match) => { %>
+            <tr>
+              <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><br><small><%= match.minute %>'</small></td>
+              <td><%= match.league %></td>
+              <td><span class="badge <%= match.funnelScore >= 85 ? 'paid' : 'awaiting' %>"><%= match.status %></span></td>
+              <td><%= match.scoreboard %></td>
+              <td><strong><%= match.liveOdd %></strong></td>
+              <td><span class="live-score-badge table-score"><%= match.funnelScore %></span><br><small><%= match.classification %></small></td>
+              <td><strong><%= match.pressure %></strong><br><small><%= match.stats.totalShots %> fin. | <%= match.stats.shotsOnTarget %> alvo | <%= match.stats.corners %> esc.</small></td>
+              <td><a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">Betano</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</section>
+
+<script>
+  (() => {
+    const root = document.querySelector("[data-live-entries-page]");
+    if (!root) return;
+
+    const signalsList = root.querySelector("[data-signals-list]");
+    const matchesBody = root.querySelector("[data-matches-body]");
+    const errorBox = root.querySelector("[data-live-error]");
+    const refreshButton = root.querySelector("[data-refresh-live]");
+    const providerLabel = root.querySelector("[data-provider-label]");
+    const lastUpdate = root.querySelector("[data-last-update]");
+    const statMatches = root.querySelector("[data-stat-matches]");
+    const statSignals = root.querySelector("[data-stat-signals]");
+    const statBestScore = root.querySelector("[data-stat-best-score]");
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      })[char]);
+    }
+
+    function render(data) {
+      providerLabel.textContent = data.providerLabel || "Demonstracao";
+      lastUpdate.textContent = data.updatedAt ? `Atualizado em ${new Date(data.updatedAt).toLocaleString("pt-BR")}` : "Aguardando primeira leitura";
+      statMatches.textContent = data.stats.matches;
+      statSignals.textContent = data.stats.signals;
+      statBestScore.textContent = data.stats.bestScore;
+
+      if (data.error) {
+        errorBox.hidden = false;
+        errorBox.innerHTML = `<p>${escapeHtml(data.error)}</p>`;
+      } else {
+        errorBox.hidden = true;
+        errorBox.innerHTML = "";
+      }
+
+      signalsList.innerHTML = data.signals.length ? data.signals.map((signal) => `
+        <article class="live-signal-card">
+          <div class="live-signal-head">
+            <div>
+              <strong>${escapeHtml(signal.homeTeam)} x ${escapeHtml(signal.awayTeam)}</strong>
+              <small>${escapeHtml(signal.league)} | ${signal.minute}' | ${escapeHtml(signal.scoreboard)}</small>
+            </div>
+            <span class="live-score-badge">${signal.funnelScore}</span>
+          </div>
+          <dl class="live-signal-metrics">
+            <div><dt>Odd</dt><dd>${escapeHtml(signal.liveOdd)}</dd></div>
+            <div><dt>Finalizacoes</dt><dd>${signal.stats.totalShots}</dd></div>
+            <div><dt>Escanteios</dt><dd>${signal.stats.corners}</dd></div>
+          </dl>
+          <ul class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+          <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">Abrir na Betano</a>
+        </article>
+      `).join("") : `
+        <article class="pool-item single live-empty-state">
+          <div>
+            <h3>Nenhuma entrada no funil agora</h3>
+            <p class="muted">Quando um jogo bater os filtros, ele aparecera aqui com odd, motivos e link Betano.</p>
+          </div>
+        </article>
+      `;
+
+      matchesBody.innerHTML = data.matches.length ? data.matches.map((match) => `
+        <tr>
+          <td><strong>${escapeHtml(match.homeTeam)} x ${escapeHtml(match.awayTeam)}</strong><br><small>${match.minute}'</small></td>
+          <td>${escapeHtml(match.league)}</td>
+          <td><span class="badge ${match.funnelScore >= 85 ? "paid" : "awaiting"}">${escapeHtml(match.status)}</span></td>
+          <td>${escapeHtml(match.scoreboard)}</td>
+          <td><strong>${escapeHtml(match.liveOdd)}</strong></td>
+          <td><span class="live-score-badge table-score">${match.funnelScore}</span><br><small>${escapeHtml(match.classification)}</small></td>
+          <td><strong>${escapeHtml(match.pressure)}</strong><br><small>${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.</small></td>
+          <td><a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">Betano</a></td>
+        </tr>
+      `).join("") : `<tr><td colspan="8">Nenhum jogo ao vivo encontrado agora.</td></tr>`;
+    }
+
+    async function load(force = false) {
+      const url = force ? "/app/entradas-ao-vivo/atualizar" : "/app/entradas-ao-vivo/dados";
+      const response = await fetch(url, { method: force ? "POST" : "GET" });
+      if (!response.ok) throw new Error("Nao foi possivel atualizar as entradas.");
+      render(await response.json());
+    }
+
+    refreshButton.addEventListener("click", async () => {
+      refreshButton.disabled = true;
+      try {
+        await load(true);
+      } finally {
+        refreshButton.disabled = false;
+      }
+    });
+
+    window.setInterval(() => load(false).catch(() => {}), 30000);
+  })();
+</script>
+<%- include("../partials/footer") %>

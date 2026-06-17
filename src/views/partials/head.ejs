@@ -56,6 +56,7 @@
       <nav class="nav" id="site-menu">
         <% if (currentUser) { %>
           <a class="<%= currentPath === '/app/boloes' || (currentPath.startsWith('/app/boloes') && currentPath.includes('/palpites')) ? 'active' : '' %>" href="<%= navGamesHref %>">Jogos</a>
+          <a class="<%= currentPath.startsWith('/app/entradas-ao-vivo') ? 'active' : '' %>" href="/app/entradas-ao-vivo">Entradas ao vivo</a>
           <a class="<%= currentPath.includes('/ranking') ? 'active' : '' %>" href="<%= navRankingHref %>">Ranking</a>
           <a class="<%= currentPath === '/regras' ? 'active' : '' %>" href="/regras">Regulamento</a>
           <a class="<%= currentPath === '/premiacoes' ? 'active' : '' %>" href="/premiacoes">Premiacoes</a>

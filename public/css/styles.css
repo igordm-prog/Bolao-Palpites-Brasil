@@ -1670,6 +1670,121 @@ select.is-invalid + .field-error {
   gap: 10px;
 }
 
+.live-entries-page .account-hero {
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.live-source-card strong {
+  color: var(--green);
+  font-size: 1.35rem;
+}
+
+.live-entry-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.live-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.live-signal-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, rgba(30, 39, 45, 0.92), rgba(16, 23, 28, 0.96));
+  border: 1px solid rgba(34, 212, 99, 0.22);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.live-signal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.live-signal-head strong {
+  display: block;
+  line-height: 1.2;
+}
+
+.live-signal-head small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.live-score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 34px;
+  padding: 5px 9px;
+  color: #07100a;
+  background: var(--green);
+  border-radius: 8px;
+  font-weight: 850;
+}
+
+.live-score-badge.table-score {
+  min-height: 30px;
+  font-size: 0.92rem;
+}
+
+.live-signal-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.live-signal-metrics div {
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.live-signal-metrics dt,
+.live-signal-metrics dd {
+  margin: 0;
+}
+
+.live-signal-metrics dt,
+.live-reasons {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.live-signal-metrics dd {
+  margin-top: 2px;
+  font-weight: 850;
+}
+
+.live-reasons {
+  display: grid;
+  gap: 4px;
+  min-height: 92px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.live-empty-state {
+  grid-column: 1 / -1;
+}
+
+.live-matches-panel table {
+  min-width: 980px;
+}
+
+.live-error {
+  margin: 0;
+}
+
 .pix-qr {
   width: min(260px, 100%);
   padding: 10px;
@@ -3272,6 +3387,11 @@ th {
 }
 
 @media (max-width: 1120px) {
+  .live-entries-page .account-hero,
+  .live-signal-grid {
+    grid-template-columns: 1fr;
+  }
+
   .betting-topline {
     flex-wrap: wrap;
     justify-content: stretch;
@@ -3303,6 +3423,16 @@ th {
 }
 
 @media (max-width: 760px) {
+  .live-entry-stats,
+  .live-signal-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .live-signal-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .betting-topline,
   .games-tools {
     grid-template-columns: 1fr;
