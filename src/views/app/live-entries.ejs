@@ -80,10 +80,25 @@
           <article class="live-signal-card">
             <div class="live-signal-head">
               <div>
-                <strong><%= signal.homeTeam %> x <%= signal.awayTeam %></strong>
-                <small><%= signal.league %> | <%= signal.minute %>' | <%= signal.scoreboard %></small>
+                <span class="live-entry-kicker">Entrada sugerida</span>
+                <strong><%= signal.recommendation?.market || "Over 1.5 gols" %></strong>
+                <small><%= signal.recommendation?.action || "Conferir a odd antes de entrar" %></small>
               </div>
               <span class="live-score-badge"><%= signal.funnelScore %></span>
+            </div>
+            <div class="live-match-line">
+              <div>
+                <strong><%= signal.homeTeam %> x <%= signal.awayTeam %></strong>
+                <small><%= signal.league %></small>
+              </div>
+              <div>
+                <strong><%= signal.scoreboard %></strong>
+                <small><%= signal.minute %>'</small>
+              </div>
+            </div>
+            <div class="live-entry-advice">
+              <strong><%= signal.recommendation?.confidence || "Forte" %></strong>
+              <span><%= signal.recommendation?.detail || "Conferir o mercado Over 1.5 gols antes de entrar." %></span>
             </div>
             <dl class="live-signal-metrics">
               <div><dt>Odd funil</dt><dd><%= signal.liveOdd %></dd></div>
@@ -93,10 +108,10 @@
             <% if (signal.odds1x2?.raw?.length) { %>
               <p class="muted">1X2: Casa <%= signal.odds1x2.home || "-" %> | Empate <%= signal.odds1x2.draw || "-" %> | Fora <%= signal.odds1x2.away || "-" %></p>
             <% } %>
-            <ul class="live-reasons">
-              <% signal.reasons.slice(0, 5).forEach((reason) => { %><li><%= reason %></li><% }) %>
-            </ul>
-            <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer"><%= signal.source === "browser_sofascore" ? "Abrir no SofaScore" : "Abrir na Betano" %></a>
+            <div class="live-reasons">
+              <% signal.reasons.slice(0, 5).forEach((reason) => { %><span><%= reason %></span><% }) %>
+            </div>
+            <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer"><%= signal.source === "browser_sofascore" ? "Conferir no SofaScore" : "Conferir na Betano" %></a>
           </article>
         <% }) %>
       </div>
@@ -185,10 +200,25 @@
         <article class="live-signal-card">
           <div class="live-signal-head">
             <div>
-              <strong>${escapeHtml(signal.homeTeam)} x ${escapeHtml(signal.awayTeam)}</strong>
-              <small>${escapeHtml(signal.league)} | ${signal.minute}' | ${escapeHtml(signal.scoreboard)}</small>
+              <span class="live-entry-kicker">Entrada sugerida</span>
+              <strong>${escapeHtml(signal.recommendation?.market || "Over 1.5 gols")}</strong>
+              <small>${escapeHtml(signal.recommendation?.action || "Conferir a odd antes de entrar")}</small>
             </div>
             <span class="live-score-badge">${signal.funnelScore}</span>
+          </div>
+          <div class="live-match-line">
+            <div>
+              <strong>${escapeHtml(signal.homeTeam)} x ${escapeHtml(signal.awayTeam)}</strong>
+              <small>${escapeHtml(signal.league)}</small>
+            </div>
+            <div>
+              <strong>${escapeHtml(signal.scoreboard)}</strong>
+              <small>${signal.minute}'</small>
+            </div>
+          </div>
+          <div class="live-entry-advice">
+            <strong>${escapeHtml(signal.recommendation?.confidence || "Forte")}</strong>
+            <span>${escapeHtml(signal.recommendation?.detail || "Conferir o mercado Over 1.5 gols antes de entrar.")}</span>
           </div>
           <dl class="live-signal-metrics">
             <div><dt>Odd funil</dt><dd>${escapeHtml(signal.liveOdd)}</dd></div>
@@ -196,8 +226,8 @@
             <div><dt>Escanteios</dt><dd>${signal.stats.corners}</dd></div>
           </dl>
           ${signal.odds1x2 && signal.odds1x2.raw && signal.odds1x2.raw.length ? `<p class="muted">1X2: Casa ${escapeHtml(signal.odds1x2.home || "-")} | Empate ${escapeHtml(signal.odds1x2.draw || "-")} | Fora ${escapeHtml(signal.odds1x2.away || "-")}</p>` : ""}
-          <ul class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-          <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">${signal.source === "browser_sofascore" ? "Abrir no SofaScore" : "Abrir na Betano"}</a>
+          <div class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}</div>
+          <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">${signal.source === "browser_sofascore" ? "Conferir no SofaScore" : "Conferir na Betano"}</a>
         </article>
       `).join("") : `
         <article class="pool-item single live-empty-state">

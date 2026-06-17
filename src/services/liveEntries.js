@@ -313,6 +313,7 @@ function buildMatch(input) {
     ...stats,
     pressure
   });
+  const recommendation = buildEntryRecommendation(input, score);
   return {
     id: input.id,
     league: input.league,
@@ -325,11 +326,30 @@ function buildMatch(input) {
     liveOdd: Number(input.liveOdd || 0).toFixed(2),
     funnelScore: score.score,
     classification: score.classification,
+    recommendation,
     reasons: score.reasons,
     stats,
     pressure,
     link: betanoEntryLink(input.league, input.homeTeam, input.awayTeam),
     source: input.source
+  };
+}
+
+function buildEntryRecommendation(input, score) {
+  const goals = Number(input.homeScore || 0) + Number(input.awayScore || 0);
+  const goalsNeeded = Math.max(0, 2 - goals);
+  const confidence = score.score >= 95 ? "Muito forte" : score.score >= 85 ? "Forte" : score.score >= 75 ? "Acompanhar" : "Baixa";
+  const detail = goalsNeeded === 2
+    ? "Precisa sair 2 gols na partida para bater a linha."
+    : goalsNeeded === 1
+      ? "Precisa sair mais 1 gol na partida para bater a linha."
+      : "Linha ja batida. Nao abrir nova entrada pelo funil Over 1.5.";
+  return {
+    market: "Over 1.5 gols",
+    action: "Conferir a odd do Over 1.5 gols antes de entrar",
+    detail,
+    goalsNeeded,
+    confidence
   };
 }
 

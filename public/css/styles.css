@@ -1685,16 +1685,17 @@ select.is-invalid + .field-error {
 
 .live-signal-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .live-signal-card {
   display: grid;
-  gap: 12px;
-  padding: 16px;
-  background: linear-gradient(180deg, rgba(30, 39, 45, 0.92), rgba(16, 23, 28, 0.96));
-  border: 1px solid rgba(34, 212, 99, 0.22);
+  align-content: start;
+  gap: 14px;
+  padding: 18px;
+  background: linear-gradient(145deg, rgba(30, 39, 45, 0.98), rgba(10, 18, 16, 0.98));
+  border: 1px solid rgba(34, 212, 99, 0.28);
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
@@ -1708,6 +1709,8 @@ select.is-invalid + .field-error {
 
 .live-signal-head strong {
   display: block;
+  margin-top: 3px;
+  font-size: 1.35rem;
   line-height: 1.2;
 }
 
@@ -1715,6 +1718,60 @@ select.is-invalid + .field-error {
   display: block;
   margin-top: 4px;
   color: var(--muted);
+}
+
+.live-entry-kicker {
+  color: var(--blue);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.live-match-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.live-match-line strong {
+  display: block;
+}
+
+.live-match-line small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.live-match-line > div:last-child {
+  min-width: 78px;
+  text-align: right;
+}
+
+.live-entry-advice {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid rgba(255, 203, 50, 0.3);
+  border-radius: 8px;
+  background: rgba(255, 203, 50, 0.08);
+}
+
+.live-entry-advice strong {
+  color: var(--yellow);
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+
+.live-entry-advice span {
+  color: var(--text);
 }
 
 .live-score-badge {
@@ -1766,11 +1823,23 @@ select.is-invalid + .field-error {
 }
 
 .live-reasons {
-  display: grid;
-  gap: 4px;
-  min-height: 92px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  min-height: 0;
+  list-style: none;
+}
+
+.live-reasons span {
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
 }
 
 .live-empty-state {
@@ -3606,6 +3675,20 @@ th {
   .live-signal-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .live-match-line,
+  .live-entry-advice {
+    grid-template-columns: 1fr;
+  }
+
+  .live-match-line {
+    display: grid;
+  }
+
+  .live-match-line > div:last-child {
+    min-width: 0;
+    text-align: left;
   }
 
   .betting-topline,
