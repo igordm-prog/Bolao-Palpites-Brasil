@@ -1,4 +1,5 @@
 const DEFAULT_API_BASE_URL = "https://v3.football.api-sports.io";
+const DEFAULT_SOFASCORE_BASE_URL = "https://www.sofascore.com/api/v1";
 const BETANO_TODAY_URL = "https://www.betano.bet.br/sport/futebol/jogos-de-hoje/";
 const DEFAULT_CACHE_MS = 30000;
 const DEFAULT_MAX_FIXTURES = 8;
@@ -50,20 +51,120 @@ async function getLiveEntriesDashboard(options = {}) {
 }
 
 async function refreshLiveEntries() {
+  const provider = String(process.env.LIVE_ENTRIES_PROVIDER || "auto").toLowerCase();
+  let fallbackReason = null;
+  if (provider === "sofascore" || provider === "auto") {
+    try {
+      const matches = await fetchSofaScoreLiveMatches();
+      setCache("sofascore", matches, null);
+      return snapshot();
+    } catch (error) {
+      if (provider === "sofascore") {
+        setCache("simulator", buildDemoMatches(), `SofaScore indisponivel: ${error.message}. Exibindo dados de demonstracao.`);
+        return snapshot();
+      }
+      fallbackReason = `SofaScore indisponivel: ${error.message}.`;
+    }
+  }
+
   const apiKey = process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY;
-  if (apiKey) {
+  if ((provider === "api_football" || provider === "auto") && apiKey) {
     try {
       const matches = await fetchApiFootballLiveMatches(apiKey);
       setCache("api_football", matches, null);
       return snapshot();
     } catch (error) {
-      setCache("simulator", buildDemoMatches(), `API-Football indisponivel: ${error.message}`);
+      setCache("simulator", buildDemoMatches(), `API-Football indisponivel: ${error.message}. Exibindo dados de demonstracao.`);
       return snapshot();
     }
   }
 
-  setCache("simulator", buildDemoMatches(), "API_FOOTBALL_KEY nao configurada. Exibindo dados de demonstracao.");
+  setCache(
+    "simulator",
+    buildDemoMatches(),
+    `${fallbackReason ? `${fallbackReason} ` : ""}API_FOOTBALL_KEY nao configurada. Exibindo dados de demonstracao.`
+  );
   return snapshot();
+}
+
+async function fetchSofaScoreLiveMatches() {
+  const baseUrl = String(process.env.SOFASCORE_BASE_URL || DEFAULT_SOFASCORE_BASE_URL).replace(/\/$/, "");
+  const payload = await sofaScoreGet(baseUrl, "/sport/football/events/live");
+  const events = Array.isArray(payload.events) ? payload.events : [];
+  const limit = Math.max(1, Math.min(30, Number(process.env.LIVE_ENTRIES_MAX_FIXTURES || DEFAULT_MAX_FIXTURES)));
+  const limited = events.slice(0, limit);
+  const settled = await Promise.allSettled(limited.map((event) => buildSofaScoreMatch(baseUrl, event)));
+  return settled
+    .filter((result) => result.status === "fulfilled" && result.value)
+    .map((result) => result.value);
+}
+
+async function buildSofaScoreMatch(baseUrl, event) {
+  const eventId = event.id;
+  const stats = eventId ? await fetchSofaScoreStatistics(baseUrl, eventId) : emptyStats();
+  const minute = Number(event.time?.currentPeriodStartTimestamp
+    ? Math.max(1, Math.floor((Date.now() / 1000 - Number(event.time.currentPeriodStartTimestamp)) / 60))
+    : event.statusTime?.prefix ? Number(String(event.statusTime.prefix).replace(/\D/g, "")) : 0);
+  const homeScore = Number(event.homeScore?.current || 0);
+  const awayScore = Number(event.awayScore?.current || 0);
+
+  return buildMatch({
+    id: `sofa-${eventId || `${event.homeTeam?.name}-${event.awayTeam?.name}`}`,
+    league: event.tournament?.name || event.tournament?.category?.name || "Campeonato",
+    homeTeam: event.homeTeam?.name || "Mandante",
+    awayTeam: event.awayTeam?.name || "Visitante",
+    minute,
+    homeScore,
+    awayScore,
+    liveOdd: estimateOver15Odd(minute, homeScore + awayScore),
+    stats,
+    startsAt: event.startTimestamp ? new Date(Number(event.startTimestamp) * 1000).toISOString() : new Date().toISOString(),
+    source: "sofascore"
+  });
+}
+
+async function fetchSofaScoreStatistics(baseUrl, eventId) {
+  try {
+    const payload = await sofaScoreGet(baseUrl, `/event/${eventId}/statistics`);
+    const stats = emptyStats();
+    const groups = Array.isArray(payload.statistics) ? payload.statistics : [];
+    groups.forEach((group) => {
+      (group.groups || []).forEach((statsGroup) => {
+        (statsGroup.statisticsItems || []).forEach((item) => {
+          const name = normalizeText(item.name);
+          const home = numberValue(item.home);
+          const away = numberValue(item.away);
+          const total = home + away;
+          if (name.includes("total shots") || name.includes("shots")) stats.totalShots += total;
+          if (name.includes("shots on target")) stats.shotsOnTarget += total;
+          if (name.includes("corner")) stats.corners += total;
+          if (name.includes("yellow")) stats.yellowCards += total;
+          if (name.includes("red")) stats.redCards += total;
+          if (name.includes("dangerous attacks")) stats.dangerousAttacks += total;
+          if (name.includes("ball possession")) stats.possessionHome = home || stats.possessionHome;
+        });
+      });
+    });
+    if (!stats.dangerousAttacks) stats.dangerousAttacks = Math.round(stats.totalShots * 2.2 + stats.corners * 2);
+    return stats;
+  } catch {
+    return emptyStats();
+  }
+}
+
+async function sofaScoreGet(baseUrl, path) {
+  const timeoutMs = Math.max(3000, Number(process.env.LIVE_ENTRIES_API_TIMEOUT_MS || DEFAULT_API_TIMEOUT_MS));
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      "accept": "application/json,text/plain,*/*",
+      "accept-language": "pt-BR,pt;q=0.9,en;q=0.8",
+      "referer": "https://www.sofascore.com/football/livescore",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+    },
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
 async function fetchApiFootballLiveMatches(apiKey) {
@@ -290,8 +391,8 @@ function snapshot() {
   return {
     updatedAt: cache.updatedAt,
     provider: cache.provider,
-    providerLabel: cache.provider === "api_football" ? "API-Football" : "Demonstracao",
-    isDemo: cache.provider !== "api_football",
+    providerLabel: cache.provider === "api_football" ? "API-Football" : cache.provider === "sofascore" ? "SofaScore" : "Demonstracao",
+    isDemo: cache.provider === "simulator",
     betanoUrl: BETANO_TODAY_URL,
     error: cache.error,
     matches,
