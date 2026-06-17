@@ -68,9 +68,15 @@
           <article>
             <h3>Jogos salvos no cache</h3>
             <% if (latestSnapshot.games?.length) { %>
-              <ul class="compact-list">
+              <ul class="compact-list sofascore-game-cache-list">
                 <% latestSnapshot.games.forEach((game) => { %>
-                  <li><strong><%= game.homeTeam %> x <%= game.awayTeam %></strong> <span class="muted"><%= game.time %> <%= game.status || "" %> <%= game.score || "" %></span></li>
+                  <li>
+                    <strong><%= game.homeTeam %> x <%= game.awayTeam %></strong>
+                    <span class="muted"><%= game.competition || "SofaScore" %><%= game.group ? ` - ${game.group}` : "" %></span>
+                    <span class="muted">Horario <%= game.time || "-" %> | Status <%= game.status || "-" %> | Minuto <%= game.minute || 0 %> | Placar <%= game.score || "-" %></span>
+                    <span class="muted">Odds 1X2: 1 <%= game.odds1x2?.home || "-" %> | X <%= game.odds1x2?.draw || "-" %> | 2 <%= game.odds1x2?.away || "-" %></span>
+                    <span class="muted">Stats base: <%= game.stats?.totalShots || 0 %> finalizacoes, <%= game.stats?.shotsOnTarget || 0 %> no alvo, <%= game.stats?.corners || 0 %> escanteios, <%= game.stats?.dangerousAttacks || 0 %> ataques perigosos</span>
+                  </li>
                 <% }) %>
               </ul>
             <% } else { %>

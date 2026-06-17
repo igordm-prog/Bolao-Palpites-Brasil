@@ -5,7 +5,7 @@ const express = require("express");
 const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
-const { getLiveEntriesDashboard, refreshLiveEntries } = require("./services/liveEntries");
+const { dashboardFromSofaScoreSnapshot, getLiveEntriesDashboard, refreshLiveEntries } = require("./services/liveEntries");
 const { runSofaScoreBrowserProbe } = require("./services/sofascoreBrowser");
 const {
   isEmailEnabled,
@@ -181,8 +181,9 @@ function normalizeData(data) {
   });
 }
 
-function latestSofaScoreSnapshot(data) {
+function latestSofaScoreSnapshot(data, options = {}) {
   return (data.sofascoreSnapshots || [])
+    .filter((snapshot) => !options.onlyOk || snapshot.ok)
     .slice()
     .sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime())[0] || null;
 }
@@ -203,11 +204,24 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     gamesCount: Array.isArray(result.games) ? result.games.length : 0,
     games: (result.games || []).map((game, index) => ({
       id: `${Date.now()}-${index + 1}`,
+      eventId: game.eventId || null,
+      competition: game.competition || null,
+      group: game.group || null,
       time: game.time,
       status: game.status,
+      statusLabel: game.statusLabel || null,
+      minute: Number(game.minute || 0),
       homeTeam: game.homeTeam,
       awayTeam: game.awayTeam,
+      homeScore: game.homeScore,
+      awayScore: game.awayScore,
       score: game.score || null,
+      odds1x2: game.odds1x2 || null,
+      liveOdd: game.liveOdd || null,
+      href: game.href || null,
+      stats: game.stats || null,
+      rawText: game.rawText || null,
+      rawLines: game.rawLines || [],
       capturedAt: result.finishedAt
     })),
     lines: (result.lines || []).slice(0, 160),
@@ -991,17 +1005,21 @@ function router(store) {
     const data = store.read();
     normalizeData(data);
     const user = getCurrentUser(data, req);
-    const liveEntries = await getLiveEntriesDashboard();
+    const liveEntries = dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true })) || await getLiveEntriesDashboard();
     res.render("app/live-entries", { title: "Entradas ao vivo", user, liveEntries });
   });
 
   app.get("/app/entradas-ao-vivo/dados", requireAuth, async (req, res) => {
-    const liveEntries = await getLiveEntriesDashboard({ maxAgeMs: 5000 });
+    const data = store.read();
+    normalizeData(data);
+    const liveEntries = dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true })) || await getLiveEntriesDashboard({ maxAgeMs: 5000 });
     res.json(liveEntries);
   });
 
   app.post("/app/entradas-ao-vivo/atualizar", requireAuth, async (req, res) => {
-    const liveEntries = await refreshLiveEntries();
+    const data = store.read();
+    normalizeData(data);
+    const liveEntries = dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true })) || await refreshLiveEntries();
     res.json(liveEntries);
   });
 

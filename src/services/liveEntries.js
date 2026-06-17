@@ -406,6 +406,55 @@ function snapshot() {
   };
 }
 
+function dashboardFromSofaScoreSnapshot(snapshot) {
+  if (!snapshot) return null;
+  const matches = (snapshot.games || []).map((game) => {
+    const minute = Number(game.minute || 0);
+    const homeScore = Number(game.homeScore ?? 0);
+    const awayScore = Number(game.awayScore ?? 0);
+    const match = buildMatch({
+      id: `browser-sofa-${game.eventId || game.id}`,
+      league: [game.competition, game.group].filter(Boolean).join(" - ") || "SofaScore",
+      homeTeam: game.homeTeam,
+      awayTeam: game.awayTeam,
+      minute,
+      homeScore,
+      awayScore,
+      liveOdd: game.liveOdd || estimateOver15Odd(minute, homeScore + awayScore),
+      stats: game.stats || emptyStats(),
+      startsAt: snapshot.finishedAt || game.capturedAt || new Date().toISOString(),
+      source: "browser_sofascore"
+    });
+    match.status = game.statusLabel || match.status;
+    match.sofaScoreStatus = game.status || null;
+    match.scoreboard = game.score || match.scoreboard;
+    match.odds1x2 = game.odds1x2 || null;
+    match.eventId = game.eventId || null;
+    match.link = game.href || match.link;
+    match.statsEstimated = Boolean(game.stats?.estimated);
+    return match;
+  });
+  const signals = matches
+    .filter((match) => match.funnelScore >= 85 && !match.reasons.includes("placar fora da janela"))
+    .sort((a, b) => b.funnelScore - a.funnelScore);
+  return {
+    updatedAt: snapshot.finishedAt || snapshot.createdAt,
+    provider: "browser_sofascore",
+    providerLabel: "SofaScore Browser",
+    isDemo: false,
+    betanoUrl: BETANO_TODAY_URL,
+    error: snapshot.ok ? null : snapshot.error,
+    matches: matches.slice().sort((a, b) => b.funnelScore - a.funnelScore),
+    signals,
+    stats: {
+      matches: matches.length,
+      live: matches.filter((match) => ["Ao vivo", "Intervalo"].includes(match.status)).length,
+      signals: signals.length,
+      bestScore: matches.reduce((highest, match) => Math.max(highest, match.funnelScore), 0)
+    }
+  };
+}
+
 function emptyStats() {
   return {
     totalShots: 0,
@@ -445,6 +494,7 @@ function normalizeText(value = "") {
 
 module.exports = {
   betanoEntryLink,
+  dashboardFromSofaScoreSnapshot,
   getLiveEntriesDashboard,
   refreshLiveEntries
 };

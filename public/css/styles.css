@@ -1778,7 +1778,7 @@ select.is-invalid + .field-error {
 }
 
 .live-matches-panel table {
-  min-width: 980px;
+  min-width: 1120px;
 }
 
 .live-error {
@@ -1816,6 +1816,11 @@ select.is-invalid + .field-error {
   gap: 8px;
   margin: 0;
   padding-left: 18px;
+}
+
+.sofascore-game-cache-list li {
+  display: grid;
+  gap: 3px;
 }
 
 .sofascore-raw-lines {
