@@ -6,8 +6,10 @@
   "main": "server.js",
   "scripts": {
     "dev": "node --watch server.js",
+    "install:browser": "playwright install chromium",
     "migrate:sqlite": "node scripts/migrate-json-to-sqlite.js",
     "reset:production": "node scripts/reset-production-data.js",
+    "test:sofascore-browser": "node scripts/test-sofascore-browser.js",
     "start": "node server.js"
   },
   "dependencies": {
@@ -21,6 +23,7 @@
     "helmet": "^7.1.0",
     "method-override": "^3.0.0",
     "nodemailer": "^9.0.0",
+    "playwright": "^1.61.0",
     "zod": "^3.23.8"
   },
   "engines": {

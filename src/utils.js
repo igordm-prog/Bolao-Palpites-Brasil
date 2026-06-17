@@ -196,6 +196,7 @@ function labelForAuditAction(action) {
     "match.created": "Jogo cadastrado",
     "match.deleted": "Jogo excluido",
     "match.result_entered": "Resultado lancado",
+    "sofascore_browser.probe_run": "Teste do robo SofaScore",
     "payment.created": "Pagamento criado",
     "payment.status_changed": "Status do pagamento alterado",
     "wallet.deposit_created": "Deposito criado",
@@ -223,6 +224,7 @@ function labelForTableName(tableName) {
     passwordResets: "Redefinicoes de senha",
     payments: "Pagamentos",
     pools: "Boloes",
+    settings: "Configuracoes",
     users: "Usuarios"
   };
   return labels[tableName] || tableName || "-";

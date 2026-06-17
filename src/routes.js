@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { getLiveEntriesDashboard, refreshLiveEntries } = require("./services/liveEntries");
+const { runSofaScoreBrowserProbe } = require("./services/sofascoreBrowser");
 const {
   isEmailEnabled,
   sendEmailVerificationCode,
@@ -158,6 +159,7 @@ function normalizeData(data) {
     data.settings.pixKey = "pix@bolaopalpitesbrasil.com.br";
   }
   data.settings.withdrawalMinimum = 20;
+  data.settings.sofascoreBrowserLastResult ||= null;
   data.payments ||= [];
   data.participations ||= [];
   data.users.forEach((user) => {
@@ -1652,6 +1654,38 @@ function router(store) {
       pendingPayments: data.payments.filter((payment) => ["deposit", "withdrawal"].includes(payment.type) && payment.status === "awaiting").length,
       logs: data.auditLogs.slice(-8).reverse()
     });
+  });
+
+  app.get("/admin/sofascore-robo", requireAuth, requireAdmin, (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    res.render("admin/sofascore-browser", {
+      title: "Robo SofaScore",
+      lastResult: data.settings.sofascoreBrowserLastResult,
+      defaultUrl: process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/"
+    });
+  });
+
+  app.post("/admin/sofascore-robo/testar", requireAuth, requireAdmin, async (req, res) => {
+    const data = store.read();
+    normalizeData(data);
+    const user = getCurrentUser(data, req);
+    const url = String(req.body.url || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/").trim();
+    if (!/^https:\/\/(www\.)?sofascore\.com\//i.test(url)) {
+      req.flash("error", "Use uma URL valida do SofaScore.");
+      return res.redirect("/admin/sofascore-robo");
+    }
+    const result = await runSofaScoreBrowserProbe({ url });
+    data.settings.sofascoreBrowserLastResult = result;
+    audit(data, user.id, "sofascore_browser.probe_run", "settings", null, {
+      ok: result.ok,
+      url: result.url,
+      games: result.games.length,
+      error: result.error
+    }, req);
+    store.write(data);
+    req.flash(result.ok ? "success" : "error", result.ok ? "Teste executado. Confira o resultado abaixo." : `Teste falhou: ${result.error}`);
+    return res.redirect("/admin/sofascore-robo");
   });
 
   app.get("/admin/boloes", requireAuth, requireAdmin, (req, res) => {

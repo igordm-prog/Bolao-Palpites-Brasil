@@ -1785,6 +1785,59 @@ select.is-invalid + .field-error {
   margin: 0;
 }
 
+.sofascore-probe-form {
+  max-width: 820px;
+}
+
+.sofascore-result {
+  display: grid;
+  gap: 16px;
+}
+
+.sofascore-result-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.sofascore-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sofascore-result-grid article {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.compact-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.sofascore-raw-lines {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.sofascore-raw-lines summary {
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.sofascore-raw-lines pre {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+}
+
 .pix-qr {
   width: min(260px, 100%);
   padding: 10px;
@@ -3388,7 +3441,9 @@ th {
 
 @media (max-width: 1120px) {
   .live-entries-page .account-hero,
-  .live-signal-grid {
+  .live-signal-grid,
+  .sofascore-result-grid,
+  .sofascore-result-stats {
     grid-template-columns: 1fr;
   }
 
