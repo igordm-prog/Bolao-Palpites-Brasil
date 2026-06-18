@@ -4,7 +4,7 @@ const { runSofaScoreBrowserProbe } = require("../src/services/sofascoreBrowser")
 
 (async () => {
   const result = await runSofaScoreBrowserProbe({
-    url: process.argv[2] || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/"
+    url: process.argv[2] || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/futebol/"
   });
   console.log(JSON.stringify({
     ok: result.ok,

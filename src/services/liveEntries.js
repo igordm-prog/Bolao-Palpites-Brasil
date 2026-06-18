@@ -1,6 +1,6 @@
 const DEFAULT_API_BASE_URL = "https://v3.football.api-sports.io";
 const DEFAULT_SOFASCORE_BASE_URL = "https://www.sofascore.com/api/v1";
-const DEFAULT_SOFASCORE_PUBLIC_URL = "https://www.sofascore.com/pt/";
+const DEFAULT_SOFASCORE_PUBLIC_URL = "https://www.sofascore.com/pt/futebol/";
 const BETANO_TODAY_URL = "https://www.betano.bet.br/sport/futebol/jogos-de-hoje/";
 const DEFAULT_CACHE_MS = 30000;
 const DEFAULT_MAX_FIXTURES = 8;
@@ -502,7 +502,7 @@ function sofaScorePublicLink(href) {
   try {
     const url = new URL(raw);
     if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return DEFAULT_SOFASCORE_PUBLIC_URL;
-    if (url.pathname === "/" || !url.pathname) url.pathname = "/pt/";
+    if (url.pathname === "/" || url.pathname === "/pt/" || !url.pathname) url.pathname = "/pt/futebol/";
     return url.toString();
   } catch {
     return DEFAULT_SOFASCORE_PUBLIC_URL;

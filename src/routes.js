@@ -190,11 +190,11 @@ function latestSofaScoreSnapshot(data, options = {}) {
 }
 
 function normalizeSofaScoreBrowserUrl(value) {
-  const raw = String(value || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/").trim();
+  const raw = String(value || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/futebol/").trim();
   try {
     const url = new URL(raw);
     if (!/^https:$/.test(url.protocol) || !/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
-    if (url.pathname === "/" || !url.pathname) url.pathname = "/pt/";
+    if (url.pathname === "/" || url.pathname === "/pt/" || !url.pathname) url.pathname = "/pt/futebol/";
     return url.toString();
   } catch {
     return null;
@@ -1806,7 +1806,7 @@ function router(store) {
       lastResult: data.settings.sofascoreBrowserLastResult,
       latestSnapshot: snapshots[0] || latestSofaScoreSnapshot(data),
       snapshots: snapshots.slice(0, 10),
-      defaultUrl: process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/"
+      defaultUrl: process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/futebol/"
     });
   });
 
