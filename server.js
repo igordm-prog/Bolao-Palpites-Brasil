@@ -18,6 +18,7 @@ const store = createStore(path.join(__dirname, "data", "db.json"));
 
 ensureSeedData(store);
 
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS || 1));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "src", "views"));
 
