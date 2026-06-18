@@ -31,10 +31,19 @@
     <% if (latestSnapshot) { %>
       <%
         const allGames = latestSnapshot.games || [];
-        const liveGames = allGames.filter((game) => {
+        const isLiveStatus = (game = {}) => {
           const status = String(game.status || "").trim();
           const statusLabel = String(game.statusLabel || "").trim();
-          return ["Ao vivo", "Intervalo"].includes(statusLabel) || /^\d{1,3}'?$/.test(status) || ["HT", "INT"].includes(status.toUpperCase());
+          const joined = `${status} ${statusLabel}`;
+          return ["Ao vivo", "Intervalo"].includes(statusLabel) ||
+            /^\d{1,3}(\+\d{1,2})?'?$/.test(status) ||
+            /^\d{1,3}(\+\d{1,2})?'?$/.test(statusLabel) ||
+            ["HT", "INT"].includes(status.toUpperCase()) ||
+            ["HT", "INT"].includes(statusLabel.toUpperCase()) ||
+            /INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(joined);
+        };
+        const liveGames = allGames.filter((game) => {
+          return isLiveStatus(game);
         });
         const hiddenGamesCount = Math.max(0, allGames.length - liveGames.length);
       %>
@@ -91,7 +100,7 @@
                   const stats = game.stats || {};
                   const statsTotal = Number(stats.totalShots || 0) + Number(stats.shotsOnTarget || 0) + Number(stats.corners || 0) + Number(stats.dangerousAttacks || 0);
                   const hasOdds = game.odds1x2 && (game.odds1x2.home || game.odds1x2.draw || game.odds1x2.away);
-                  const displayStatus = ["Ao vivo", "Intervalo"].includes(game.statusLabel) || /^\d{1,3}'?$/.test(String(game.status || "")) || /^\d{1,3}'?$/.test(String(game.statusLabel || "")) ? "Ao vivo" : game.statusLabel || game.status || "Ao vivo";
+                  const displayStatus = isLiveStatus(game) ? (game.statusLabel === "Intervalo" || ["HT", "INT"].includes(String(game.status || "").toUpperCase()) ? "Intervalo" : "Ao vivo") : game.statusLabel || game.status || "Ao vivo";
                 %>
                   <div class="sofascore-game-card">
                     <div class="sofascore-game-title">

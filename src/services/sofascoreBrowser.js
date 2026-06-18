@@ -1,6 +1,9 @@
 const DEFAULT_SOFASCORE_URL = "https://www.sofascore.com/pt/futebol/";
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_SETTLE_MS = 5000;
+const DEFAULT_CAPTURE_DELAY_MS = 1000;
+const DEFAULT_MAX_CAPTURE_STEPS = 80;
+const DEFAULT_MAX_EMPTY_CAPTURE_STEPS = 8;
 
 function normalizeLine(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
@@ -83,6 +86,10 @@ function minuteFromStatus(status) {
   return match ? Number(match[1]) + Number(match[2] || 0) : 0;
 }
 
+function hasLiveStatus(game = {}) {
+  return ["Ao vivo", "Intervalo"].includes(gameStatusLabel(game.status || game.statusLabel || ""));
+}
+
 function buildEstimatedStats(game) {
   const minute = Number(game.minute || 0);
   const goals = Number(game.homeScore || 0) + Number(game.awayScore || 0);
@@ -119,6 +126,10 @@ function compactGameKey(homeTeam, awayTeam, eventId) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function gameKey(game = {}, fallback = "") {
+  return game.eventId || compactGameKey(game.homeTeam, game.awayTeam, game.time || game.status || fallback);
 }
 
 function enrichGames(games = [], sideCards = []) {
@@ -175,6 +186,7 @@ function mergeProbePayloads(payloads = []) {
   const gamesByKey = new Map();
   const linksByKey = new Map();
   const lines = [];
+  const isApiSource = (source) => String(source || "").startsWith("api_");
 
   payloads.filter(Boolean).forEach((payload) => {
     (payload.lines || []).forEach((line) => {
@@ -184,9 +196,18 @@ function mergeProbePayloads(payloads = []) {
       linksByKey.set(`${link.text}|${link.href}`, link);
     });
     (payload.games || []).forEach((game) => {
-      const key = game.eventId || compactGameKey(game.homeTeam, game.awayTeam, game.time || game.status || gamesByKey.size + 1);
+      const key = gameKey(game, gamesByKey.size + 1);
       const current = gamesByKey.get(key) || {};
-      if (current.source === "api_in_browser" && game.source !== "api_in_browser") {
+      if (hasLiveStatus(current) && !hasLiveStatus(game)) {
+        gamesByKey.set(key, {
+          ...game,
+          ...current,
+          rawText: current.rawText || game.rawText || null,
+          rawLines: current.rawLines?.length ? current.rawLines : game.rawLines || []
+        });
+        return;
+      }
+      if (isApiSource(current.source) && !isApiSource(game.source)) {
         gamesByKey.set(key, {
           ...game,
           ...current,
@@ -219,6 +240,83 @@ function friendlyBrowserError(error) {
     return "Tempo limite ao abrir o SofaScore. Tente novamente ou aumente SOFASCORE_BROWSER_TIMEOUT_MS.";
   }
   return message.split("\n")[0];
+}
+
+function cleanValue(value = "") {
+  return String(value).replace(/\s+/g, " ").trim();
+}
+
+function statusFromSofaScoreEvent(event) {
+  const description = cleanValue(event.status?.description || event.status?.type || "");
+  const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
+  if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
+  if (/^\d{1,3}/.test(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+  const start = Number(event.time?.currentPeriodStartTimestamp || 0);
+  if (start > 0) {
+    const minute = Math.max(1, Math.min(130, Math.floor((Date.now() / 1000 - start) / 60)));
+    return `${minute}'`;
+  }
+  if (/finished|ended|after/i.test(description)) return "FT";
+  if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
+  return "Ao vivo";
+}
+
+function timeFromSofaScoreEvent(event) {
+  const start = Number(event.startTimestamp || 0);
+  if (!start) return null;
+  return new Date(start * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function mapSofaScoreEventsToGames(events = [], source = "api_in_browser") {
+  return events
+    .map((event) => {
+      const homeTeam = cleanValue(event.homeTeam?.name || event.homeTeam?.shortName || "Mandante");
+      const awayTeam = cleanValue(event.awayTeam?.name || event.awayTeam?.shortName || "Visitante");
+      const homeScore = event.homeScore?.current ?? event.homeScore?.display ?? null;
+      const awayScore = event.awayScore?.current ?? event.awayScore?.display ?? null;
+      const competition = cleanValue(
+        event.tournament?.name ||
+        event.tournament?.uniqueTournament?.name ||
+        event.tournament?.category?.name ||
+        "SofaScore"
+      );
+      const group = cleanValue(event.tournament?.category?.name || event.tournament?.category?.country?.name || "");
+      const status = statusFromSofaScoreEvent(event);
+      return {
+        eventId: event.id ? String(event.id) : null,
+        href: event.slug ? `https://www.sofascore.com/pt/football/match/${event.slug}${event.id ? `#id:${event.id}` : ""}` : null,
+        rawText: cleanValue(`${competition} | ${group} | ${homeTeam} x ${awayTeam} | ${status}`),
+        rawLines: [competition, group, timeFromSofaScoreEvent(event), status, homeTeam, awayTeam, homeScore, awayScore].filter((item) => item !== null && item !== undefined && item !== ""),
+        time: timeFromSofaScoreEvent(event),
+        status,
+        competition,
+        group: group || null,
+        homeTeam,
+        awayTeam,
+        homeScore,
+        awayScore,
+        odds: [],
+        source
+      };
+    })
+    .filter((game) => game.homeTeam && game.awayTeam);
+}
+
+function collectEventsFromJson(value, output = [], seen = new Set()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return output;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    if (value.some((item) => item?.homeTeam && item?.awayTeam)) {
+      value.forEach((item) => {
+        if (item?.homeTeam && item?.awayTeam) output.push(item);
+      });
+      return output;
+    }
+    value.slice(0, 80).forEach((item) => collectEventsFromJson(item, output, seen));
+    return output;
+  }
+  Object.values(value).slice(0, 80).forEach((item) => collectEventsFromJson(item, output, seen));
+  return output;
 }
 
 async function fetchLiveEventsFromPage(page) {
@@ -305,6 +403,9 @@ async function runSofaScoreBrowserProbe(options = {}) {
   const url = options.url || process.env.SOFASCORE_BROWSER_URL || DEFAULT_SOFASCORE_URL;
   const timeoutMs = Number(options.timeoutMs || process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
   const settleMs = Number(options.settleMs || process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS);
+  const captureDelayMs = Math.max(400, Number(options.captureDelayMs || process.env.SOFASCORE_BROWSER_CAPTURE_DELAY_MS || DEFAULT_CAPTURE_DELAY_MS));
+  const maxCaptureSteps = Math.max(10, Number(options.maxCaptureSteps || process.env.SOFASCORE_BROWSER_MAX_CAPTURE_STEPS || DEFAULT_MAX_CAPTURE_STEPS));
+  const maxEmptyCaptureSteps = Math.max(3, Number(options.maxEmptyCaptureSteps || process.env.SOFASCORE_BROWSER_MAX_EMPTY_CAPTURE_STEPS || DEFAULT_MAX_EMPTY_CAPTURE_STEPS));
   let browser;
 
   try {
@@ -321,12 +422,28 @@ async function runSofaScoreBrowserProbe(options = {}) {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
     });
     const page = await context.newPage();
+    const apiNetworkGames = [];
+    page.on("response", async (networkResponse) => {
+      try {
+        const responseUrl = networkResponse.url();
+        if (!/\/api\/v1\//i.test(responseUrl) || !/(event|scheduled|live)/i.test(responseUrl)) return;
+        const contentType = networkResponse.headers()["content-type"] || "";
+        if (!/json/i.test(contentType) && !/(event|scheduled|live)/i.test(responseUrl)) return;
+        const json = await networkResponse.json();
+        const events = collectEventsFromJson(json);
+        if (!events.length) return;
+        apiNetworkGames.push(...mapSofaScoreEventsToGames(events, /live/i.test(responseUrl) ? "api_network_live" : "api_network"));
+      } catch {
+        // Some SofaScore responses are not JSON or are consumed before inspection.
+      }
+    });
     const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: timeoutMs });
     await page.waitForTimeout(Math.max(1000, settleMs));
     await page.locator("text=Futebol").first().click({ timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(500);
-    await page.locator("text=Ao Vivo").first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(1000);
+    await page.getByText(/Ao Vivo/i).first().click({ timeout: 4000 }).catch(() => {});
+    await page.waitForLoadState("networkidle", { timeout: 7000 }).catch(() => {});
+    await page.waitForTimeout(1200);
     await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
     const apiPayload = await fetchLiveEventsFromPage(page).catch(() => null);
 
@@ -438,18 +555,51 @@ async function runSofaScoreBrowserProbe(options = {}) {
     });
 
     const payloads = [];
-    for (let step = 0; step < 10; step += 1) {
-      payloads.push(await collectPayload());
+    const visualSeenKeys = new Set();
+    let emptySteps = 0;
+    for (let step = 0; step < maxCaptureSteps; step += 1) {
+      const payload = await collectPayload();
+      const newGames = (payload.games || []).filter((game, index) => {
+        const key = gameKey(game, `${step}-${index}`);
+        if (!key || visualSeenKeys.has(key)) return false;
+        visualSeenKeys.add(key);
+        return true;
+      });
+      payloads.push({ ...payload, games: newGames });
+
+      if (newGames.length) {
+        emptySteps = 0;
+      } else {
+        emptySteps += 1;
+      }
+
       const moved = await page.evaluate(() => {
         const before = window.scrollY;
-        window.scrollBy(0, Math.max(520, Math.floor(window.innerHeight * 0.82)));
-        return window.scrollY !== before;
+        const distance = Math.max(360, Math.floor(window.innerHeight * 0.58));
+        window.scrollBy(0, distance);
+        return {
+          moved: window.scrollY !== before,
+          scrollY: window.scrollY,
+          nearBottom: window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 12
+        };
       });
-      if (!moved) break;
-      await page.waitForTimeout(450);
+      if ((!moved.moved || moved.nearBottom) && emptySteps >= 2) break;
+      if (emptySteps >= maxEmptyCaptureSteps) break;
+      await page.waitForTimeout(captureDelayMs);
     }
 
-    const payload = mergeProbePayloads([apiPayload, ...payloads]);
+    const networkPayload = apiNetworkGames.length
+      ? {
+          title: await page.title().catch(() => null),
+          currentUrl: page.url(),
+          textLength: 0,
+          lines: [],
+          games: apiNetworkGames,
+          sideCards: [],
+          links: []
+        }
+      : null;
+    const payload = mergeProbePayloads([networkPayload, apiPayload, ...payloads]);
     const lines = likelyFootballLines(payload.lines);
     if ((response?.status && response.status() >= 400) || payload.textLength < 100 || lines.some((line) => /forbidden|\"code\":\s*403/i.test(line))) {
       throw new Error(`SofaScore bloqueou a leitura do navegador${response?.status ? `: HTTP ${response.status()}` : ""}.`);
