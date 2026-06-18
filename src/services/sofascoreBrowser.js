@@ -90,6 +90,16 @@ function hasLiveStatus(game = {}) {
   return ["Ao vivo", "Intervalo"].includes(gameStatusLabel(game.status || game.statusLabel || ""));
 }
 
+function isLiveSofaScoreEvent(event = {}) {
+  const description = cleanValue(event.status?.description || event.status?.type || "");
+  const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
+  if (/half.?time|interval|intervalo|break/i.test(description)) return true;
+  if (/^\d{1,3}/.test(statusTime)) return true;
+  if (Number(event.time?.currentPeriodStartTimestamp || 0) > 0) return true;
+  if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return true;
+  return false;
+}
+
 function buildEstimatedStats(game) {
   const minute = Number(game.minute || 0);
   const goals = Number(game.homeScore || 0) + Number(game.awayScore || 0);
@@ -258,7 +268,8 @@ function statusFromSofaScoreEvent(event) {
   }
   if (/finished|ended|after/i.test(description)) return "FT";
   if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
-  return "Ao vivo";
+  if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return "Ao vivo";
+  return description || "-";
 }
 
 function timeFromSofaScoreEvent(event) {
@@ -269,6 +280,7 @@ function timeFromSofaScoreEvent(event) {
 
 function mapSofaScoreEventsToGames(events = [], source = "api_in_browser") {
   return events
+    .filter(isLiveSofaScoreEvent)
     .map((event) => {
       const homeTeam = cleanValue(event.homeTeam?.name || event.homeTeam?.shortName || "Mandante");
       const awayTeam = cleanValue(event.awayTeam?.name || event.awayTeam?.shortName || "Visitante");
@@ -346,7 +358,18 @@ async function fetchLiveEventsFromPage(page) {
       }
       if (/finished|ended|after/i.test(description)) return "FT";
       if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
-      return "Ao vivo";
+      if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return "Ao vivo";
+      return description || "-";
+    }
+
+    function isLiveEvent(event) {
+      const description = clean(event.status?.description || event.status?.type || "");
+      const statusTime = clean(event.statusTime?.prefix || event.statusTime?.current || "");
+      if (/half.?time|interval|intervalo|break/i.test(description)) return true;
+      if (/^\d{1,3}/.test(statusTime)) return true;
+      if (Number(event.time?.currentPeriodStartTimestamp || 0) > 0) return true;
+      if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return true;
+      return false;
     }
 
     function timeFromEvent(event) {
@@ -355,7 +378,7 @@ async function fetchLiveEventsFromPage(page) {
       return new Date(start * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     }
 
-    const games = events.map((event) => {
+    const games = events.filter(isLiveEvent).map((event) => {
       const homeTeam = clean(event.homeTeam?.name || event.homeTeam?.shortName || "Mandante");
       const awayTeam = clean(event.awayTeam?.name || event.awayTeam?.shortName || "Visitante");
       const homeScore = event.homeScore?.current ?? event.homeScore?.display ?? null;
