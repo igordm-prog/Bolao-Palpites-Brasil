@@ -72,8 +72,9 @@ function gameStatusLabel(status) {
   const upper = normalized.toUpperCase();
   if (!normalized || normalized === "-") return "Agendado";
   if (/^\d{1,3}(\+\d{1,2})?'?$/.test(normalized) || upper === "AO VIVO") return "Ao vivo";
+  if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(normalized)) return "Ao vivo";
   if (upper === "HT" || upper === "INT" || upper === "INTERVALO") return "Intervalo";
-  if (upper === "FT" || upper === "FINALIZADO") return "Finalizado";
+  if (upper === "FT" || upper === "FINALIZADO" || /FINISHED|ENDED|AFTER EXTRA|AFTER PEN/i.test(normalized)) return "Finalizado";
   return normalized;
 }
 
@@ -185,6 +186,15 @@ function mergeProbePayloads(payloads = []) {
     (payload.games || []).forEach((game) => {
       const key = game.eventId || compactGameKey(game.homeTeam, game.awayTeam, game.time || game.status || gamesByKey.size + 1);
       const current = gamesByKey.get(key) || {};
+      if (current.source === "api_in_browser" && game.source !== "api_in_browser") {
+        gamesByKey.set(key, {
+          ...game,
+          ...current,
+          rawText: current.rawText || game.rawText || null,
+          rawLines: current.rawLines?.length ? current.rawLines : game.rawLines || []
+        });
+        return;
+      }
       gamesByKey.set(key, { ...current, ...game });
     });
   });
@@ -229,15 +239,16 @@ async function fetchLiveEventsFromPage(page) {
     function statusFromEvent(event) {
       const description = clean(event.status?.description || event.status?.type || "");
       const statusTime = clean(event.statusTime?.prefix || event.statusTime?.current || "");
-      if (/half|intervalo/i.test(description)) return "HT";
+      if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
       if (/^\d{1,3}/.test(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
       const start = Number(event.time?.currentPeriodStartTimestamp || 0);
       if (start > 0) {
         const minute = Math.max(1, Math.min(130, Math.floor((Date.now() / 1000 - start) / 60)));
         return `${minute}'`;
       }
-      if (/inprogress|live|ao vivo/i.test(description)) return "Ao vivo";
-      return description || "Ao vivo";
+      if (/finished|ended|after/i.test(description)) return "FT";
+      if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
+      return "Ao vivo";
     }
 
     function timeFromEvent(event) {
