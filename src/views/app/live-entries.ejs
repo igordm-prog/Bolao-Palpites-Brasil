@@ -65,7 +65,7 @@
           <p class="eyebrow">Alertas</p>
           <h2>Entradas encontradas</h2>
         </div>
-        <span class="muted">Atualiza automaticamente a cada 30s</span>
+        <span class="muted">Robo a cada 2min. Tela a cada 30s.</span>
       </div>
       <div class="live-signal-grid" data-signals-list>
         <% if (!liveEntries.signals.length) { %>
@@ -80,11 +80,11 @@
           <article class="live-signal-card">
             <div class="live-signal-head">
               <div>
-                <span class="live-entry-kicker">Entrada sugerida</span>
-                <strong><%= signal.recommendation?.market || "Over 1.5 gols" %></strong>
-                <small><%= signal.recommendation?.action || "Conferir a odd antes de entrar" %></small>
+                <p class="live-entry-kicker">Entrada sugerida</p>
+                <h3><%= signal.recommendation?.market || "Over 1.5 gols" %></h3>
+                <p><%= signal.recommendation?.action || "Conferir a odd antes de entrar" %></p>
               </div>
-              <span class="live-score-badge"><%= signal.funnelScore %></span>
+              <span class="live-score-badge"><small>Score</small><strong><%= signal.funnelScore %></strong></span>
             </div>
             <div class="live-match-line">
               <div>
@@ -108,9 +108,9 @@
             <% if (signal.odds1x2?.raw?.length) { %>
               <p class="muted">1X2: Casa <%= signal.odds1x2.home || "-" %> | Empate <%= signal.odds1x2.draw || "-" %> | Fora <%= signal.odds1x2.away || "-" %></p>
             <% } %>
-            <div class="live-reasons">
-              <% signal.reasons.slice(0, 5).forEach((reason) => { %><span><%= reason %></span><% }) %>
-            </div>
+            <ul class="live-reasons">
+              <% signal.reasons.slice(0, 5).forEach((reason) => { %><li><%= reason %></li><% }) %>
+            </ul>
             <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer"><%= signal.source === "browser_sofascore" ? "Conferir no SofaScore" : "Conferir na Betano" %></a>
           </article>
         <% }) %>
@@ -200,11 +200,11 @@
         <article class="live-signal-card">
           <div class="live-signal-head">
             <div>
-              <span class="live-entry-kicker">Entrada sugerida</span>
-              <strong>${escapeHtml(signal.recommendation?.market || "Over 1.5 gols")}</strong>
-              <small>${escapeHtml(signal.recommendation?.action || "Conferir a odd antes de entrar")}</small>
+              <p class="live-entry-kicker">Entrada sugerida</p>
+              <h3>${escapeHtml(signal.recommendation?.market || "Over 1.5 gols")}</h3>
+              <p>${escapeHtml(signal.recommendation?.action || "Conferir a odd antes de entrar")}</p>
             </div>
-            <span class="live-score-badge">${signal.funnelScore}</span>
+            <span class="live-score-badge"><small>Score</small><strong>${signal.funnelScore}</strong></span>
           </div>
           <div class="live-match-line">
             <div>
@@ -226,7 +226,7 @@
             <div><dt>Escanteios</dt><dd>${signal.stats.corners}</dd></div>
           </dl>
           ${signal.odds1x2 && signal.odds1x2.raw && signal.odds1x2.raw.length ? `<p class="muted">1X2: Casa ${escapeHtml(signal.odds1x2.home || "-")} | Empate ${escapeHtml(signal.odds1x2.draw || "-")} | Fora ${escapeHtml(signal.odds1x2.away || "-")}</p>` : ""}
-          <div class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<span>${escapeHtml(reason)}</span>`).join("")}</div>
+          <ul class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
           <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">${signal.source === "browser_sofascore" ? "Conferir no SofaScore" : "Conferir na Betano"}</a>
         </article>
       `).join("") : `

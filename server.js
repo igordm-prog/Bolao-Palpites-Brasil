@@ -11,7 +11,7 @@ const { createStore } = require("./src/store");
 const { ensureSeedData } = require("./src/services/seed");
 const { attachLocals } = require("./src/middleware/locals");
 const { flashMessages } = require("./src/middleware/flash");
-const { router } = require("./src/routes");
+const { router, startSofaScoreAutoMonitor } = require("./src/routes");
 
 const app = express();
 const store = createStore(path.join(__dirname, "data", "db.json"));
@@ -53,6 +53,7 @@ app.use(
 
 app.use(attachLocals(store));
 app.use(router(store));
+startSofaScoreAutoMonitor(store);
 
 app.use((req, res) => {
   res.status(404).render("status", {

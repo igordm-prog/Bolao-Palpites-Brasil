@@ -1707,20 +1707,22 @@ select.is-invalid + .field-error {
   gap: 12px;
 }
 
-.live-signal-head strong {
+.live-signal-head h3 {
   display: block;
-  margin-top: 3px;
-  font-size: 1.35rem;
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: 1.45rem;
   line-height: 1.2;
 }
 
-.live-signal-head small {
+.live-signal-head p {
   display: block;
-  margin-top: 4px;
+  margin: 4px 0 0;
   color: var(--muted);
 }
 
 .live-entry-kicker {
+  margin: 0;
   color: var(--blue);
   font-size: 0.74rem;
   font-weight: 900;
@@ -1776,10 +1778,11 @@ select.is-invalid + .field-error {
 
 .live-score-badge {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 34px;
+  min-width: 58px;
+  min-height: 48px;
   padding: 5px 9px;
   color: #07100a;
   background: var(--green);
@@ -1787,7 +1790,23 @@ select.is-invalid + .field-error {
   font-weight: 850;
 }
 
+.live-score-badge small {
+  display: block;
+  color: rgba(7, 16, 10, 0.78);
+  font-size: 0.62rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.live-score-badge strong {
+  color: #07100a;
+  font-size: 1.1rem;
+  line-height: 1.15;
+}
+
 .live-score-badge.table-score {
+  flex-direction: row;
+  min-width: 44px;
   min-height: 30px;
   font-size: 0.92rem;
 }
@@ -1832,7 +1851,7 @@ select.is-invalid + .field-error {
   list-style: none;
 }
 
-.live-reasons span {
+.live-reasons li {
   padding: 5px 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;

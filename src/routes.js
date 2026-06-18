@@ -189,6 +189,18 @@ function latestSofaScoreSnapshot(data, options = {}) {
     .sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime())[0] || null;
 }
 
+function normalizeSofaScoreBrowserUrl(value) {
+  const raw = String(value || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/").trim();
+  try {
+    const url = new URL(raw);
+    if (!/^https:$/.test(url.protocol) || !/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
+    if (url.pathname === "/" || !url.pathname) url.pathname = "/pt/";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function saveSofaScoreSnapshot(data, store, result, userId) {
   const games = (result.games || []).map((game, index) => ({
     id: `${Date.now()}-${index + 1}`,
@@ -238,6 +250,63 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     .sort((a, b) => a.id - b.id);
   data.settings.sofascoreBrowserLastResult = result;
   return snapshot;
+}
+
+async function updateSofaScoreCache(store, options = {}) {
+  const url = normalizeSofaScoreBrowserUrl(options.url);
+  if (!url) throw new Error("Use uma URL valida do SofaScore.");
+  const result = await runSofaScoreBrowserProbe({ url });
+  let snapshot;
+  store.update((data) => {
+    normalizeData(data);
+    snapshot = saveSofaScoreSnapshot(data, store, result, options.userId || null);
+    audit(data, options.userId || null, "sofascore_browser.cache_updated", "sofascoreSnapshots", null, {
+      ok: result.ok,
+      url: result.url,
+      games: result.games.length,
+      liveGames: snapshot.liveGamesCount,
+      snapshotId: snapshot.id,
+      source: options.source || "manual",
+      error: result.error
+    }, options.req || null);
+  });
+  return { result, snapshot };
+}
+
+function startSofaScoreAutoMonitor(store, options = {}) {
+  if (process.env.SOFASCORE_AUTO_MONITOR === "false") {
+    console.log("[SofaScore] Monitor automatico desativado por SOFASCORE_AUTO_MONITOR=false.");
+    return { stop: () => {} };
+  }
+  const intervalMs = Math.max(120000, Number(options.intervalMs || process.env.SOFASCORE_AUTO_INTERVAL_MS || 120000));
+  const startDelayMs = Math.max(10000, Number(options.startDelayMs || process.env.SOFASCORE_AUTO_START_DELAY_MS || 15000));
+  let running = false;
+
+  async function run(reason) {
+    if (running) return;
+    running = true;
+    try {
+      const { result, snapshot } = await updateSofaScoreCache(store, { source: `auto:${reason}` });
+      const status = result.ok ? "ok" : `erro: ${result.error}`;
+      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}.`);
+    } catch (error) {
+      console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
+    } finally {
+      running = false;
+    }
+  }
+
+  const firstRun = setTimeout(() => run("startup"), startDelayMs);
+  const timer = setInterval(() => run("interval"), intervalMs);
+  firstRun.unref?.();
+  timer.unref?.();
+  console.log(`[SofaScore] Monitor automatico ligado a cada ${Math.round(intervalMs / 1000)}s.`);
+  return {
+    stop: () => {
+      clearTimeout(firstRun);
+      clearInterval(timer);
+    }
+  };
 }
 
 function poolFinancials(data, pool) {
@@ -1745,22 +1814,17 @@ function router(store) {
     const data = store.read();
     normalizeData(data);
     const user = getCurrentUser(data, req);
-    const url = String(req.body.url || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/").trim();
-    if (!/^https:\/\/(www\.)?sofascore\.com\//i.test(url)) {
-      req.flash("error", "Use uma URL valida do SofaScore.");
-      return res.redirect("/admin/sofascore-robo");
+    try {
+      const { result } = await updateSofaScoreCache(store, {
+        url: req.body.url,
+        userId: user.id,
+        req,
+        source: "manual"
+      });
+      req.flash(result.ok ? "success" : "error", result.ok ? "Cache do monitor atualizado. Confira os jogos salvos abaixo." : `Monitor falhou: ${result.error}`);
+    } catch (error) {
+      req.flash("error", error.message);
     }
-    const result = await runSofaScoreBrowserProbe({ url });
-    const snapshot = saveSofaScoreSnapshot(data, store, result, user.id);
-    audit(data, user.id, "sofascore_browser.cache_updated", "sofascoreSnapshots", null, {
-      ok: result.ok,
-      url: result.url,
-      games: result.games.length,
-      snapshotId: snapshot.id,
-      error: result.error
-    }, req);
-    store.write(data);
-    req.flash(result.ok ? "success" : "error", result.ok ? "Cache do monitor atualizado. Confira os jogos salvos abaixo." : `Monitor falhou: ${result.error}`);
     return res.redirect("/admin/sofascore-robo");
   });
 
@@ -2236,4 +2300,4 @@ function router(store) {
   return app;
 }
 
-module.exports = { router };
+module.exports = { router, startSofaScoreAutoMonitor, updateSofaScoreCache };
