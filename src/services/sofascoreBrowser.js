@@ -15,6 +15,10 @@ function onlyNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function isMinuteStatus(value) {
+  return /^\d{1,3}(\+\d{1,2})?'?$/.test(normalizeLine(value));
+}
+
 function likelyFootballLines(lines) {
   const ignored = new Set([
     "Sofascore",
@@ -74,7 +78,7 @@ function gameStatusLabel(status) {
   const normalized = normalizeLine(status);
   const upper = normalized.toUpperCase();
   if (!normalized || normalized === "-") return "Agendado";
-  if (/^\d{1,3}(\+\d{1,2})?'?$/.test(normalized) || upper === "AO VIVO") return "Ao vivo";
+  if (isMinuteStatus(normalized) || upper === "AO VIVO") return "Ao vivo";
   if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(normalized)) return "Ao vivo";
   if (upper === "HT" || upper === "INT" || upper === "INTERVALO") return "Intervalo";
   if (upper === "FT" || upper === "FINALIZADO" || /FINISHED|ENDED|AFTER EXTRA|AFTER PEN/i.test(normalized)) return "Finalizado";
@@ -82,6 +86,7 @@ function gameStatusLabel(status) {
 }
 
 function minuteFromStatus(status) {
+  if (!isMinuteStatus(status)) return 0;
   const match = String(status || "").match(/^(\d{1,3})(?:\+(\d{1,2}))?'?$/);
   return match ? Number(match[1]) + Number(match[2] || 0) : 0;
 }
@@ -93,9 +98,14 @@ function hasLiveStatus(game = {}) {
 function isLiveSofaScoreEvent(event = {}) {
   const description = cleanValue(event.status?.description || event.status?.type || "");
   const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
+  if (/finished|ended|after|notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return false;
   if (/half.?time|interval|intervalo|break/i.test(description)) return true;
-  if (/^\d{1,3}/.test(statusTime)) return true;
-  if (Number(event.time?.currentPeriodStartTimestamp || 0) > 0) return true;
+  if (isMinuteStatus(statusTime)) return true;
+  const periodStart = Number(event.time?.currentPeriodStartTimestamp || 0);
+  if (periodStart > 0) {
+    const elapsedMinutes = Math.floor((Date.now() / 1000 - periodStart) / 60);
+    if (elapsedMinutes > 0 && elapsedMinutes <= 130) return true;
+  }
   if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return true;
   return false;
 }
@@ -260,14 +270,14 @@ function statusFromSofaScoreEvent(event) {
   const description = cleanValue(event.status?.description || event.status?.type || "");
   const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
   if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
-  if (/^\d{1,3}/.test(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
-  const start = Number(event.time?.currentPeriodStartTimestamp || 0);
-  if (start > 0) {
-    const minute = Math.max(1, Math.min(130, Math.floor((Date.now() / 1000 - start) / 60)));
-    return `${minute}'`;
-  }
   if (/finished|ended|after/i.test(description)) return "FT";
   if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
+  if (isMinuteStatus(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+  const start = Number(event.time?.currentPeriodStartTimestamp || 0);
+  if (start > 0) {
+    const minute = Math.floor((Date.now() / 1000 - start) / 60);
+    if (minute > 0 && minute <= 130) return `${minute}'`;
+  }
   if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return "Ao vivo";
   return description || "-";
 }
@@ -346,18 +356,22 @@ async function fetchLiveEventsFromPage(page) {
       return String(value).replace(/\s+/g, " ").trim();
     }
 
+    function isMinute(value = "") {
+      return /^\d{1,3}(\+\d{1,2})?'?$/.test(clean(value));
+    }
+
     function statusFromEvent(event) {
       const description = clean(event.status?.description || event.status?.type || "");
       const statusTime = clean(event.statusTime?.prefix || event.statusTime?.current || "");
       if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
-      if (/^\d{1,3}/.test(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
-      const start = Number(event.time?.currentPeriodStartTimestamp || 0);
-      if (start > 0) {
-        const minute = Math.max(1, Math.min(130, Math.floor((Date.now() / 1000 - start) / 60)));
-        return `${minute}'`;
-      }
       if (/finished|ended|after/i.test(description)) return "FT";
       if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
+      if (isMinute(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+      const start = Number(event.time?.currentPeriodStartTimestamp || 0);
+      if (start > 0) {
+        const minute = Math.floor((Date.now() / 1000 - start) / 60);
+        if (minute > 0 && minute <= 130) return `${minute}'`;
+      }
       if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return "Ao vivo";
       return description || "-";
     }
@@ -365,9 +379,14 @@ async function fetchLiveEventsFromPage(page) {
     function isLiveEvent(event) {
       const description = clean(event.status?.description || event.status?.type || "");
       const statusTime = clean(event.statusTime?.prefix || event.statusTime?.current || "");
+      if (/finished|ended|after|notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return false;
       if (/half.?time|interval|intervalo|break/i.test(description)) return true;
-      if (/^\d{1,3}/.test(statusTime)) return true;
-      if (Number(event.time?.currentPeriodStartTimestamp || 0) > 0) return true;
+      if (isMinute(statusTime)) return true;
+      const periodStart = Number(event.time?.currentPeriodStartTimestamp || 0);
+      if (periodStart > 0) {
+        const elapsedMinutes = Math.floor((Date.now() / 1000 - periodStart) / 60);
+        if (elapsedMinutes > 0 && elapsedMinutes <= 130) return true;
+      }
       if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return true;
       return false;
     }
@@ -449,13 +468,13 @@ async function runSofaScoreBrowserProbe(options = {}) {
     page.on("response", async (networkResponse) => {
       try {
         const responseUrl = networkResponse.url();
-        if (!/\/api\/v1\//i.test(responseUrl) || !/(event|scheduled|live)/i.test(responseUrl)) return;
+        if (!/\/api\/v1\//i.test(responseUrl) || !/\/events\/live(?:\?|$)/i.test(responseUrl)) return;
         const contentType = networkResponse.headers()["content-type"] || "";
-        if (!/json/i.test(contentType) && !/(event|scheduled|live)/i.test(responseUrl)) return;
+        if (!/json/i.test(contentType)) return;
         const json = await networkResponse.json();
         const events = collectEventsFromJson(json);
         if (!events.length) return;
-        apiNetworkGames.push(...mapSofaScoreEventsToGames(events, /live/i.test(responseUrl) ? "api_network_live" : "api_network"));
+        apiNetworkGames.push(...mapSofaScoreEventsToGames(events, "api_network_live"));
       } catch {
         // Some SofaScore responses are not JSON or are consumed before inspection.
       }
