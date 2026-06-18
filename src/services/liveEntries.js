@@ -480,7 +480,7 @@ function isSofaScoreLiveGame(game = {}) {
   const status = String(game.status || "").trim();
   const statusLabel = String(game.statusLabel || "").trim();
   if (["Ao vivo", "Intervalo"].includes(statusLabel)) return true;
-  if (/^\d{1,3}'?$/.test(status)) return true;
+  if (/^\d{1,3}(\+\d{1,2})?'?$/.test(status)) return true;
   if (["HT", "INT"].includes(status.toUpperCase())) return true;
   return false;
 }
@@ -489,7 +489,7 @@ function sofaScoreDisplayStatus(game = {}) {
   const status = String(game.status || "").trim();
   const statusLabel = String(game.statusLabel || "").trim();
   if (["Ao vivo", "Intervalo", "Finalizado", "Agendado"].includes(statusLabel)) return statusLabel;
-  if (/^\d{1,3}'?$/.test(status) || /^\d{1,3}'?$/.test(statusLabel)) return "Ao vivo";
+  if (/^\d{1,3}(\+\d{1,2})?'?$/.test(status) || /^\d{1,3}(\+\d{1,2})?'?$/.test(statusLabel)) return "Ao vivo";
   if (["HT", "INT"].includes(status.toUpperCase()) || ["HT", "INT"].includes(statusLabel.toUpperCase())) return "Intervalo";
   if (status.toUpperCase() === "FT" || statusLabel.toUpperCase() === "FT") return "Finalizado";
   if (!status || status === "-") return "Agendado";

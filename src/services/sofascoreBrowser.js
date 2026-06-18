@@ -7,7 +7,8 @@ function normalizeLine(value = "") {
 }
 
 function onlyNumber(value) {
-  const parsed = Number(String(value || "").replace(",", "."));
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(String(value).replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
@@ -70,15 +71,15 @@ function gameStatusLabel(status) {
   const normalized = normalizeLine(status);
   const upper = normalized.toUpperCase();
   if (!normalized || normalized === "-") return "Agendado";
-  if (/^\d{1,3}'?$/.test(normalized) || upper === "AO VIVO") return "Ao vivo";
+  if (/^\d{1,3}(\+\d{1,2})?'?$/.test(normalized) || upper === "AO VIVO") return "Ao vivo";
   if (upper === "HT" || upper === "INT" || upper === "INTERVALO") return "Intervalo";
   if (upper === "FT" || upper === "FINALIZADO") return "Finalizado";
   return normalized;
 }
 
 function minuteFromStatus(status) {
-  const match = String(status || "").match(/^(\d{1,3})'?$/);
-  return match ? Number(match[1]) : 0;
+  const match = String(status || "").match(/^(\d{1,3})(?:\+(\d{1,2}))?'?$/);
+  return match ? Number(match[1]) + Number(match[2] || 0) : 0;
 }
 
 function buildEstimatedStats(game) {
@@ -210,6 +211,84 @@ function friendlyBrowserError(error) {
   return message.split("\n")[0];
 }
 
+async function fetchLiveEventsFromPage(page) {
+  return page.evaluate(async () => {
+    const response = await fetch("/api/v1/sport/football/events/live", {
+      headers: {
+        "accept": "application/json,text/plain,*/*"
+      }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const events = Array.isArray(payload.events) ? payload.events : [];
+
+    function clean(value = "") {
+      return String(value).replace(/\s+/g, " ").trim();
+    }
+
+    function statusFromEvent(event) {
+      const description = clean(event.status?.description || event.status?.type || "");
+      const statusTime = clean(event.statusTime?.prefix || event.statusTime?.current || "");
+      if (/half|intervalo/i.test(description)) return "HT";
+      if (/^\d{1,3}/.test(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+      const start = Number(event.time?.currentPeriodStartTimestamp || 0);
+      if (start > 0) {
+        const minute = Math.max(1, Math.min(130, Math.floor((Date.now() / 1000 - start) / 60)));
+        return `${minute}'`;
+      }
+      if (/inprogress|live|ao vivo/i.test(description)) return "Ao vivo";
+      return description || "Ao vivo";
+    }
+
+    function timeFromEvent(event) {
+      const start = Number(event.startTimestamp || 0);
+      if (!start) return null;
+      return new Date(start * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    const games = events.map((event) => {
+      const homeTeam = clean(event.homeTeam?.name || event.homeTeam?.shortName || "Mandante");
+      const awayTeam = clean(event.awayTeam?.name || event.awayTeam?.shortName || "Visitante");
+      const homeScore = event.homeScore?.current ?? event.homeScore?.display ?? null;
+      const awayScore = event.awayScore?.current ?? event.awayScore?.display ?? null;
+      const competition = clean(
+        event.tournament?.name ||
+        event.tournament?.uniqueTournament?.name ||
+        event.tournament?.category?.name ||
+        "SofaScore"
+      );
+      const group = clean(event.tournament?.category?.name || event.tournament?.category?.country?.name || "");
+      const status = statusFromEvent(event);
+      return {
+        eventId: event.id ? String(event.id) : null,
+        href: event.slug ? `https://www.sofascore.com/pt/football/match/${event.slug}${event.id ? `#id:${event.id}` : ""}` : null,
+        rawText: clean(`${competition} | ${group} | ${homeTeam} x ${awayTeam} | ${status}`),
+        rawLines: [competition, group, timeFromEvent(event), status, homeTeam, awayTeam, homeScore, awayScore].filter((item) => item !== null && item !== undefined && item !== ""),
+        time: timeFromEvent(event),
+        status,
+        competition,
+        group: group || null,
+        homeTeam,
+        awayTeam,
+        homeScore,
+        awayScore,
+        odds: [],
+        source: "api_in_browser"
+      };
+    }).filter((game) => game.homeTeam && game.awayTeam);
+
+    return {
+      title: document.title,
+      currentUrl: location.href,
+      textLength: document.body.innerText.length,
+      lines: document.body.innerText.split("\n"),
+      games,
+      sideCards: [],
+      links: []
+    };
+  });
+}
+
 async function runSofaScoreBrowserProbe(options = {}) {
   const startedAt = new Date().toISOString();
   const url = options.url || process.env.SOFASCORE_BROWSER_URL || DEFAULT_SOFASCORE_URL;
@@ -238,6 +317,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
     await page.locator("text=Ao Vivo").first().click({ timeout: 4000 }).catch(() => {});
     await page.waitForTimeout(1000);
     await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
+    const apiPayload = await fetchLiveEventsFromPage(page).catch(() => null);
 
     const collectPayload = () => page.evaluate(() => {
       const clean = (value = "") => String(value).replace(/\s+/g, " ").trim();
@@ -358,7 +438,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
       await page.waitForTimeout(450);
     }
 
-    const payload = mergeProbePayloads(payloads);
+    const payload = mergeProbePayloads([apiPayload, ...payloads]);
     const lines = likelyFootballLines(payload.lines);
     if ((response?.status && response.status() >= 400) || payload.textLength < 100 || lines.some((line) => /forbidden|\"code\":\s*403/i.test(line))) {
       throw new Error(`SofaScore bloqueou a leitura do navegador${response?.status ? `: HTTP ${response.status()}` : ""}.`);
