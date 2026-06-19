@@ -210,6 +210,7 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     time: game.time,
     status: game.status,
     statusLabel: game.statusLabel || null,
+    statusSource: game.statusSource || null,
     minute: Number(game.minute || 0),
     homeTeam: game.homeTeam,
     awayTeam: game.awayTeam,
@@ -288,7 +289,11 @@ function startSofaScoreAutoMonitor(store, options = {}) {
     try {
       const { result, snapshot } = await updateSofaScoreCache(store, { source: `auto:${reason}` });
       const status = result.ok ? "ok" : `erro: ${result.error}`;
-      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}.`);
+      const sampleStatuses = (snapshot.games || [])
+        .slice(0, 8)
+        .map((game) => `${game.homeTeam || "?"} ${game.status || "-"} ${game.statusLabel || ""}`.trim())
+        .join(" | ");
+      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}`);
     } catch (error) {
       console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
     } finally {

@@ -440,7 +440,7 @@ function snapshot() {
 function dashboardFromSofaScoreSnapshot(snapshot) {
   if (!snapshot) return null;
   const matches = (snapshot.games || []).filter((game) => isSofaScoreLiveGame(game) && !isIgnoredCompetition(game)).map((game) => {
-    const minute = Number(game.minute || 0);
+    const minute = Number(game.minute || 0) || minuteFromSofaScoreStatus(game.status) || minuteFromSofaScoreStatus(game.statusLabel);
     const homeScore = Number(game.homeScore ?? 0);
     const awayScore = Number(game.awayScore ?? 0);
     const match = buildMatch({
@@ -491,7 +491,7 @@ function isSofaScoreLiveGame(game = {}) {
   const statusLabel = String(game.statusLabel || "").trim();
   if (["Ao vivo", "Intervalo"].includes(status)) return true;
   if (["Ao vivo", "Intervalo"].includes(statusLabel)) return true;
-  if (/^\d{1,3}(\+\d{1,2})'$/.test(status)) return true;
+  if (minuteFromSofaScoreStatus(status) || minuteFromSofaScoreStatus(statusLabel)) return true;
   if (["HT", "INT"].includes(status.toUpperCase())) return true;
   if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(`${status} ${statusLabel}`)) return true;
   return false;
@@ -511,12 +511,19 @@ function sofaScoreDisplayStatus(game = {}) {
   const statusLabel = String(game.statusLabel || "").trim();
   if (["Ao vivo", "Intervalo"].includes(status)) return status;
   if (["Ao vivo", "Intervalo", "Finalizado", "Agendado"].includes(statusLabel)) return statusLabel;
-  if (/^\d{1,3}(\+\d{1,2})'$/.test(status) || /^\d{1,3}(\+\d{1,2})'$/.test(statusLabel)) return "Ao vivo";
+  if (minuteFromSofaScoreStatus(status) || minuteFromSofaScoreStatus(statusLabel)) return "Ao vivo";
   if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(`${status} ${statusLabel}`)) return "Ao vivo";
   if (["HT", "INT"].includes(status.toUpperCase()) || ["HT", "INT"].includes(statusLabel.toUpperCase())) return "Intervalo";
   if (status.toUpperCase() === "FT" || statusLabel.toUpperCase() === "FT" || /FINISHED|ENDED|AFTER EXTRA|AFTER PEN/i.test(`${status} ${statusLabel}`)) return "Finalizado";
   if (!status || status === "-") return "Agendado";
   return statusLabel || status;
+}
+
+function minuteFromSofaScoreStatus(status) {
+  const match = String(status || "").trim().match(/^(\d{1,3})(?:\+(\d{0,2}))?'?$/);
+  if (!match) return 0;
+  const minute = Number(match[1]) + Number(match[2] || 0);
+  return minute > 0 && minute <= 130 ? minute : 0;
 }
 
 function sofaScorePublicLink(href) {

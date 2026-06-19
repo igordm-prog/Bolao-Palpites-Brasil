@@ -27,8 +27,26 @@ function onlyNumber(value) {
 
 function isMinuteStatus(value, options = {}) {
   const normalized = normalizeLine(value);
-  if (options.allowPlain) return /^\d{1,3}(\+\d{1,2})?'?$/.test(normalized);
-  return /^\d{1,3}(\+\d{1,2})'$/.test(normalized);
+  if (options.allowPlain) return /^\d{1,3}(\+\d{0,2})?'?$/.test(normalized);
+  return /^\d{1,3}(\+\d{0,2})'$/.test(normalized);
+}
+
+function minuteValue(status, options = {}) {
+  const normalized = normalizeLine(status);
+  const allowPlain = Boolean(options.allowPlain);
+  const pattern = allowPlain ? /^(\d{1,3})(?:\+(\d{0,2}))?'?$/ : /^(\d{1,3})(?:\+(\d{0,2}))'$/;
+  const match = normalized.match(pattern);
+  if (!match) return 0;
+  const minute = Number(match[1]) + Number(match[2] || 0);
+  return minute > 0 && minute <= 130 ? minute : 0;
+}
+
+function normalizeCapturedStatus(status, source) {
+  const normalized = normalizeLine(status || "-");
+  if (!normalized) return "-";
+  const minute = minuteValue(normalized, { allowPlain: true });
+  if (minute && !normalized.includes("'") && source === "time_column") return `${normalized}'`;
+  return normalized;
 }
 
 function likelyFootballLines(lines) {
@@ -54,8 +72,8 @@ function likelyFootballLines(lines) {
 function inferGamesFromLines(lines) {
   const games = [];
   const invalidTeams = new Set(["ENTRAR", "Em Tendencia", "Futebol", "Favoritos", "Competicoes", "Hoje"]);
-  const isTime = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|\d{1,3}'|Ao vivo)$/i.test(line);
-  const isStatus = (line) => /^(-|HT|FT|INT|AET|PEN|\d{1,3}'|Ao vivo)$/i.test(line);
+  const isTime = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|\d{1,3}(?:\+\d{0,2})?'|Ao vivo)$/i.test(line);
+  const isStatus = (line) => /^(-|HT|FT|INT|AET|PEN|\d{1,3}(?:\+\d{0,2})?'|Ao vivo)$/i.test(line);
   const isScore = (line) => /^\d{1,2}$/.test(line);
   const isTeam = (line) =>
     /^[\p{L}\d .,'&()-]{2,}$/u.test(line) &&
@@ -90,7 +108,7 @@ function gameStatusLabel(status) {
   const normalized = normalizeLine(status);
   const upper = normalized.toUpperCase();
   if (!normalized || normalized === "-") return "Agendado";
-  if (isMinuteStatus(normalized) || upper === "AO VIVO") return "Ao vivo";
+  if (minuteValue(normalized, { allowPlain: true }) || upper === "AO VIVO") return "Ao vivo";
   if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(normalized)) return "Ao vivo";
   if (upper === "HT" || upper === "INT" || upper === "INTERVALO") return "Intervalo";
   if (upper === "FT" || upper === "FINALIZADO" || /FINISHED|ENDED|AFTER EXTRA|AFTER PEN/i.test(normalized)) return "Finalizado";
@@ -98,9 +116,7 @@ function gameStatusLabel(status) {
 }
 
 function minuteFromStatus(status) {
-  if (!isMinuteStatus(status)) return 0;
-  const match = String(status || "").match(/^(\d{1,3})(?:\+(\d{1,2}))?'?$/);
-  return match ? Number(match[1]) + Number(match[2] || 0) : 0;
+  return minuteValue(status, { allowPlain: true });
 }
 
 function hasLiveStatus(game = {}) {
@@ -237,6 +253,67 @@ function parseSofaScoreStatistics(payload = {}) {
   return mappedItems ? stats : emptyStats();
 }
 
+function numberNearLabel(lines, labelPatterns) {
+  const normalizedLines = lines.map((line) => normalizeLine(line));
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const key = normalizeKey(normalizedLines[index]);
+    if (!labelPatterns.some((pattern) => key.includes(pattern))) continue;
+    const candidates = [
+      normalizedLines[index - 2],
+      normalizedLines[index - 1],
+      normalizedLines[index + 1],
+      normalizedLines[index + 2]
+    ];
+    const values = candidates
+      .map((value) => onlyNumber(String(value || "").replace("%", "")))
+      .filter((value) => value !== null && value >= 0);
+    if (values.length >= 2) return values[0] + values[1];
+    if (values.length === 1) return values[0];
+  }
+  return 0;
+}
+
+function sidePercentNearLabel(lines, labelPatterns) {
+  const normalizedLines = lines.map((line) => normalizeLine(line));
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const key = normalizeKey(normalizedLines[index]);
+    if (!labelPatterns.some((pattern) => key.includes(pattern))) continue;
+    const candidates = [
+      normalizedLines[index - 2],
+      normalizedLines[index - 1],
+      normalizedLines[index + 1],
+      normalizedLines[index + 2]
+    ];
+    const value = candidates.find((item) => /^\d{1,3}%$/.test(String(item || "")));
+    if (value) return numberValue(value);
+  }
+  return 50;
+}
+
+function parseVisualStatisticsLines(lines = []) {
+  const totalShots = numberNearLabel(lines, ["finalizacoes", "total shots"]);
+  const shotsOnTarget = numberNearLabel(lines, ["finalizacoes no alvo", "shots on target"]);
+  const corners = numberNearLabel(lines, ["escanteios", "corner"]);
+  const dangerousAttacks = numberNearLabel(lines, ["ataques perigosos", "dangerous attacks"]);
+  const yellowCards = numberNearLabel(lines, ["cartoes amarelos", "yellow cards"]);
+  const redCards = numberNearLabel(lines, ["cartoes vermelhos", "red cards"]);
+  const possessionHome = sidePercentNearLabel(lines, ["posse de bola", "ball possession"]);
+  const hasRealStats = totalShots || shotsOnTarget || corners || dangerousAttacks || yellowCards || redCards;
+  if (!hasRealStats) return emptyStats();
+  return {
+    totalShots,
+    shotsOnTarget,
+    corners,
+    dangerousAttacks: dangerousAttacks || Math.round(totalShots * 2.2 + corners * 2),
+    possessionHome,
+    yellowCards,
+    redCards,
+    estimated: false,
+    unavailable: false,
+    source: "sofascore_visual_statistics"
+  };
+}
+
 function inferOddsFromText(text = "") {
   const odds = String(text)
     .match(/\b\d{1,2}[.,]\d{2}\b/g)
@@ -270,8 +347,7 @@ function enrichGames(games = [], sideCards = []) {
   }));
   return games
     .map((game, index) => {
-      let status = normalizeLine(game.status || "-");
-      if (/^\d{1,3}$/.test(status) && game.source !== "api_event_detail") status = `${status}'`;
+      const status = normalizeCapturedStatus(game.status || "-", game.statusSource || game.source);
       const statusLabel = gameStatusLabel(status);
       const minute = minuteFromStatus(status);
       const homeScore = onlyNumber(game.homeScore ?? String(game.score || "").split("x")[0]);
@@ -300,6 +376,7 @@ function enrichGames(games = [], sideCards = []) {
         href: game.href || null,
         rawText: game.rawText || null,
         rawLines: game.rawLines || [],
+        statusSource: game.statusSource || null,
         stats: game.stats || emptyStats(),
         source: "browser_sofascore"
       };
@@ -369,6 +446,34 @@ function friendlyBrowserError(error) {
   return message.split("\n")[0];
 }
 
+async function clickLiveFilter(page) {
+  const clicked = await page.evaluate(() => {
+    const candidates = Array.from(document.querySelectorAll("button,a,div,span"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const text = String(element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+        return { element, rect, text };
+      })
+      .filter(({ rect, text }) =>
+        rect.width >= 40 &&
+        rect.width <= 220 &&
+        rect.height >= 18 &&
+        rect.height <= 80 &&
+        /^Ao Vivo(?:\s*\(\d+\)|\s+\d+)?$/i.test(text)
+      )
+      .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
+    const target = candidates[0]?.element;
+    if (!target) return false;
+    target.click();
+    return true;
+  }).catch(() => false);
+  if (clicked) {
+    await page.waitForTimeout(1000);
+    await page.waitForLoadState("networkidle", { timeout: 5000 }).catch(() => {});
+  }
+  return clicked;
+}
+
 function cleanValue(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
 }
@@ -418,6 +523,7 @@ function mapSofaScoreEventsToGames(events = [], source = "api_in_browser") {
         rawLines: [competition, group, timeFromSofaScoreEvent(event), status, homeTeam, awayTeam, homeScore, awayScore].filter((item) => item !== null && item !== undefined && item !== ""),
         time: timeFromSofaScoreEvent(event),
         status,
+        statusSource: source,
         competition,
         group: group || null,
         homeTeam,
@@ -464,7 +570,7 @@ async function fetchLiveEventsFromPage(page) {
     }
 
     function isMinute(value = "") {
-      return /^\d{1,3}(\+\d{1,2})?'?$/.test(clean(value));
+      return /^\d{1,3}(\+\d{0,2})?'?$/.test(clean(value));
     }
 
     function statusFromEvent(event) {
@@ -524,6 +630,7 @@ async function fetchLiveEventsFromPage(page) {
         rawLines: [competition, group, timeFromEvent(event), status, homeTeam, awayTeam, homeScore, awayScore].filter((item) => item !== null && item !== undefined && item !== ""),
         time: timeFromEvent(event),
         status,
+        statusSource: "api_in_browser",
         competition,
         group: group || null,
         homeTeam,
@@ -581,6 +688,43 @@ async function fetchGameStatisticsFromPage(page, eventId) {
   }
 }
 
+function statisticsUrlForGame(game = {}) {
+  const raw = String(game.href || "").trim();
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
+    const hash = url.hash || (game.eventId ? `#id:${game.eventId}` : "");
+    url.hash = hash.includes("tab:statistics")
+      ? hash
+      : `${hash.replace(/,tab:[^,]+/g, "")},tab:statistics`;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGameStatisticsVisually(page, game = {}) {
+  const url = statisticsUrlForGame(game);
+  if (!url) return emptyStats();
+  try {
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: Math.max(8000, Number(process.env.SOFASCORE_BROWSER_DETAIL_TIMEOUT_MS || 16000)) });
+    await page.waitForTimeout(Math.max(1500, Number(process.env.SOFASCORE_BROWSER_DETAIL_SETTLE_MS || 3500)));
+    await page.getByText(/Estat/i).first().click({ timeout: 2000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    const lines = await page.evaluate(() =>
+      document.body.innerText
+        .split("\n")
+        .map((line) => String(line || "").replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 260)
+    );
+    return parseVisualStatisticsLines(lines);
+  } catch {
+    return emptyStats();
+  }
+}
+
 async function fetchGameDetailsFromPage(page, eventId) {
   if (!eventId) return null;
   try {
@@ -602,26 +746,54 @@ async function fetchGameDetailsFromPage(page, eventId) {
   }
 }
 
+function liveStatusRank(status) {
+  const normalized = normalizeLine(status);
+  const label = gameStatusLabel(normalized);
+  if (minuteFromStatus(normalized)) return 4;
+  if (label === "Intervalo") return 3;
+  if (label === "Ao vivo") return 2;
+  if (label === "Finalizado" || label === "Agendado") return 0;
+  return normalized && normalized !== "-" ? 1 : 0;
+}
+
+function chooseBestLiveStatus(game, details) {
+  const gameStatus = normalizeCapturedStatus(game?.status || game?.statusLabel || "-", game?.statusSource || game?.source);
+  const detailStatus = normalizeCapturedStatus(details?.status || details?.statusLabel || "-", details?.statusSource || details?.source);
+  const gameRank = liveStatusRank(gameStatus);
+  const detailRank = liveStatusRank(detailStatus);
+  return detailRank > gameRank ? detailStatus : gameStatus;
+}
+
 async function attachRealStatistics(page, games = []) {
   const maxStats = Math.max(1, Number(process.env.SOFASCORE_BROWSER_MAX_STATS_FETCH || 40));
+  const maxVisualStats = Math.max(0, Number(process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH || 25));
   const delayMs = Math.max(0, Number(process.env.SOFASCORE_BROWSER_STATS_DELAY_MS || 250));
   const enriched = [];
+  let visualStatsCount = 0;
   for (const game of games) {
     if (enriched.length >= maxStats) {
       enriched.push({ ...game, stats: game.stats || emptyStats() });
       continue;
     }
     const details = await fetchGameDetailsFromPage(page, game.eventId);
-    const stats = await fetchGameStatisticsFromPage(page, game.eventId);
+    let stats = await fetchGameStatisticsFromPage(page, game.eventId);
+    if (stats.unavailable && visualStatsCount < maxVisualStats) {
+      const visualStats = await fetchGameStatisticsVisually(page, { ...game, ...(details || {}) });
+      if (!visualStats.unavailable) stats = visualStats;
+      visualStatsCount += 1;
+    }
+    const status = chooseBestLiveStatus(game, details);
+    const minute = minuteFromStatus(status) || Number(game.minute || details?.minute || 0);
     enriched.push({
       ...game,
       ...(details || {}),
-      status: details?.status && minuteFromStatus(details.status) ? details.status : game.status,
-      statusLabel: gameStatusLabel((details?.status && minuteFromStatus(details.status) ? details.status : game.status) || game.statusLabel),
-      minute: details?.status && minuteFromStatus(details.status) ? minuteFromStatus(details.status) : game.minute || 0,
+      status,
+      statusLabel: gameStatusLabel(status),
+      minute,
       stats,
       rawText: details?.rawText || game.rawText || null,
-      rawLines: details?.rawLines?.length ? details.rawLines : game.rawLines || []
+      rawLines: details?.rawLines?.length ? details.rawLines : game.rawLines || [],
+      statusSource: details?.statusSource || game.statusSource || null
     });
     if (delayMs) await page.waitForTimeout(delayMs);
   }
@@ -671,7 +843,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
     await page.waitForTimeout(Math.max(1000, settleMs));
     await page.locator("text=Futebol").first().click({ timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(500);
-    await page.getByText(/Ao Vivo/i).first().click({ timeout: 4000 }).catch(() => {});
+    await clickLiveFilter(page);
     await page.waitForLoadState("networkidle", { timeout: 7000 }).catch(() => {});
     await page.waitForTimeout(1200);
     await page.evaluate(() => window.scrollTo(0, 0)).catch(() => {});
@@ -681,7 +853,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
       const clean = (value = "") => String(value).replace(/\s+/g, " ").trim();
       const lines = document.body.innerText.split("\n");
       const eventLinks = Array.from(document.querySelectorAll('a[class*="event-hl-"]'));
-      const isTimeOrStatus = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line);
+      const isTimeOrStatus = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|-|\d{1,3}(?:\+\d{0,2})?'|Ao vivo|Intervalo)$/i.test(line);
       const isScore = (line) => /^\d{1,2}$/.test(line);
       const isTeamLine = (line) =>
         /^[\p{L}\d .,'&()-]{2,}$/u.test(line) &&
@@ -730,7 +902,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
             String(item.className).includes("ov_hidden") &&
             String(item.className).includes("min-w_") &&
             lines.length >= 2 &&
-            lines.every((line) => !/^\d+$/.test(line) && !/^(\d{1,2}:\d{2}|FT|HT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line))
+            lines.every((line) => !/^\d+$/.test(line) && !/^(\d{1,2}:\d{2}|FT|HT|INT|-|\d{1,3}(?:\+\d{0,2})?'|Ao vivo|Intervalo)$/i.test(line))
           );
         const scoreBox = divs.find((item) => String(item.className).includes("w_[38px]"));
         const scoreLines = textLines(scoreBox).filter((line) => /^\d{1,2}$/.test(line));
@@ -738,8 +910,9 @@ async function runSofaScoreBrowserProbe(options = {}) {
         const teamLines = teamBox?.lines?.length >= 2 ? teamBox.lines : rowLines.filter(isTeamLine).slice(-2);
         const homeTeam = teamLines[0] || rowLines[2] || "Mandante";
         const awayTeam = teamLines[1] || rowLines[3] || "Visitante";
-        const statusLine = timeStatusLines.find((line) => /^(HT|FT|INT|-|\d{1,3}|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line)) ||
-          rowLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line));
+        const statusFromTimeColumn = timeStatusLines.find((line) => /^(HT|FT|INT|-|\d{1,3}(?:\+\d{0,2})?|\d{1,3}(?:\+\d{0,2})?'|Ao vivo|Intervalo)$/i.test(line));
+        const statusFromRow = rowLines.find((line) => /^(HT|FT|INT|-|\d{1,3}(?:\+\d{0,2})?'|Ao vivo|Intervalo)$/i.test(line));
+        const statusLine = statusFromTimeColumn || statusFromRow;
         const timeLine = timeStatusLines.find((line) => /^\d{1,2}:\d{2}$/.test(line)) ||
           rowLines.find((line) => /^\d{1,2}:\d{2}$/.test(line));
         const section = sectionInfo(link, homeTeam, awayTeam);
@@ -750,6 +923,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
           rawLines: rowLines,
           time: timeLine || null,
           status: statusLine || null,
+          statusSource: statusFromTimeColumn ? "time_column" : statusFromRow ? "row" : null,
           competition: section.competition,
           group: section.group,
           homeTeam,
