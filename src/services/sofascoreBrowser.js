@@ -4,9 +4,19 @@ const DEFAULT_SETTLE_MS = 5000;
 const DEFAULT_CAPTURE_DELAY_MS = 1000;
 const DEFAULT_MAX_CAPTURE_STEPS = 80;
 const DEFAULT_MAX_EMPTY_CAPTURE_STEPS = 8;
+const IGNORED_COMPETITIONS = new Set(["club friendly games mundo"]);
 
 function normalizeLine(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
+}
+
+function normalizeKey(value = "") {
+  return normalizeLine(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function onlyNumber(value) {
@@ -93,6 +103,16 @@ function minuteFromStatus(status) {
 
 function hasLiveStatus(game = {}) {
   return ["Ao vivo", "Intervalo"].includes(gameStatusLabel(game.status || game.statusLabel || ""));
+}
+
+function isIgnoredCompetition(game = {}) {
+  const keys = [
+    `${game.competition || ""} ${game.group || ""}`,
+    game.competition,
+    game.league,
+    game.rawText
+  ].map(normalizeKey);
+  return keys.some((key) => IGNORED_COMPETITIONS.has(key) || key.includes("club friendly games mundo"));
 }
 
 function isLiveSofaScoreEvent(event = {}) {
@@ -197,7 +217,7 @@ function enrichGames(games = [], sideCards = []) {
         source: "browser_sofascore"
       };
     })
-    .filter((game) => game.homeTeam && game.awayTeam)
+    .filter((game) => game.homeTeam && game.awayTeam && !isIgnoredCompetition(game))
     .slice(0, 80);
 }
 
@@ -321,7 +341,7 @@ function mapSofaScoreEventsToGames(events = [], source = "api_in_browser") {
         source
       };
     })
-    .filter((game) => game.homeTeam && game.awayTeam);
+    .filter((game) => game.homeTeam && game.awayTeam && !isIgnoredCompetition(game));
 }
 
 function collectEventsFromJson(value, output = [], seen = new Set()) {

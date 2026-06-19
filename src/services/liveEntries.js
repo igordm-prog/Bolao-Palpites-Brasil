@@ -5,6 +5,7 @@ const BETANO_TODAY_URL = "https://www.betano.bet.br/sport/futebol/jogos-de-hoje/
 const DEFAULT_CACHE_MS = 30000;
 const DEFAULT_MAX_FIXTURES = 8;
 const DEFAULT_API_TIMEOUT_MS = 8000;
+const IGNORED_COMPETITIONS = new Set(["club friendly games mundo"]);
 
 const leagueLinks = new Map([
   ["brasileirao serie a", "https://www.betano.bet.br/sport/futebol/brasil/brasileirao-serie-a-betano/10016/"],
@@ -429,7 +430,7 @@ function snapshot() {
 
 function dashboardFromSofaScoreSnapshot(snapshot) {
   if (!snapshot) return null;
-  const matches = (snapshot.games || []).filter(isSofaScoreLiveGame).map((game) => {
+  const matches = (snapshot.games || []).filter((game) => isSofaScoreLiveGame(game) && !isIgnoredCompetition(game)).map((game) => {
     const minute = Number(game.minute || 0);
     const homeScore = Number(game.homeScore ?? 0);
     const awayScore = Number(game.awayScore ?? 0);
@@ -484,6 +485,15 @@ function isSofaScoreLiveGame(game = {}) {
   if (["HT", "INT"].includes(status.toUpperCase())) return true;
   if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(`${status} ${statusLabel}`)) return true;
   return false;
+}
+
+function isIgnoredCompetition(game = {}) {
+  const keys = [
+    `${game.competition || ""} ${game.group || ""}`,
+    game.league,
+    game.rawText
+  ].map(normalizeText);
+  return keys.some((key) => IGNORED_COMPETITIONS.has(key) || key.includes("club friendly games mundo"));
 }
 
 function sofaScoreDisplayStatus(game = {}) {
