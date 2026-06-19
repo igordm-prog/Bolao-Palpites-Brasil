@@ -615,6 +615,8 @@ async function attachRealStatistics(page, games = []) {
     enriched.push({
       ...game,
       ...(details || {}),
+      statusLabel: details ? gameStatusLabel(details.status || game.status || game.statusLabel) : game.statusLabel,
+      minute: details?.status ? minuteFromStatus(details.status) || game.minute || 0 : game.minute || 0,
       stats,
       rawText: details?.rawText || game.rawText || null,
       rawLines: details?.rawLines?.length ? details.rawLines : game.rawLines || []

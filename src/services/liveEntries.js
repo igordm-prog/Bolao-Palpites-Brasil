@@ -489,6 +489,7 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
 function isSofaScoreLiveGame(game = {}) {
   const status = String(game.status || "").trim();
   const statusLabel = String(game.statusLabel || "").trim();
+  if (["Ao vivo", "Intervalo"].includes(status)) return true;
   if (["Ao vivo", "Intervalo"].includes(statusLabel)) return true;
   if (/^\d{1,3}(\+\d{1,2})'$/.test(status)) return true;
   if (["HT", "INT"].includes(status.toUpperCase())) return true;
@@ -508,6 +509,7 @@ function isIgnoredCompetition(game = {}) {
 function sofaScoreDisplayStatus(game = {}) {
   const status = String(game.status || "").trim();
   const statusLabel = String(game.statusLabel || "").trim();
+  if (["Ao vivo", "Intervalo"].includes(status)) return status;
   if (["Ao vivo", "Intervalo", "Finalizado", "Agendado"].includes(statusLabel)) return statusLabel;
   if (/^\d{1,3}(\+\d{1,2})'$/.test(status) || /^\d{1,3}(\+\d{1,2})'$/.test(statusLabel)) return "Ao vivo";
   if (/INPROGRESS|LIVE|1ST|2ND|FIRST HALF|SECOND HALF|1H|2H/i.test(`${status} ${statusLabel}`)) return "Ao vivo";
