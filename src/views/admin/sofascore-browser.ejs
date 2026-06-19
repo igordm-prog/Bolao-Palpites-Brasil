@@ -99,6 +99,7 @@
                 <% liveGames.forEach((game) => {
                   const stats = game.stats || {};
                   const statsTotal = Number(stats.totalShots || 0) + Number(stats.shotsOnTarget || 0) + Number(stats.corners || 0) + Number(stats.dangerousAttacks || 0);
+                  const hasRealStats = !stats.estimated && !stats.unavailable;
                   const hasOdds = game.odds1x2 && (game.odds1x2.home || game.odds1x2.draw || game.odds1x2.away);
                   const displayStatus = isLiveStatus(game) ? (game.statusLabel === "Intervalo" || ["HT", "INT"].includes(String(game.status || "").toUpperCase()) ? "Intervalo" : "Ao vivo") : game.statusLabel || game.status || "Ao vivo";
                 %>
@@ -129,7 +130,7 @@
                         <span>2 <strong><%= game.odds1x2.away || "-" %></strong></span>
                       </div>
                     <% } %>
-                    <% if (statsTotal > 0) { %>
+                    <% if (hasRealStats || statsTotal > 0) { %>
                       <dl class="sofascore-stats-row">
                         <div><dt>Finalizacoes</dt><dd><%= stats.totalShots || 0 %></dd></div>
                         <div><dt>No alvo</dt><dd><%= stats.shotsOnTarget || 0 %></dd></div>

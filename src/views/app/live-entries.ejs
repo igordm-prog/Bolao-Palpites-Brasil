@@ -138,6 +138,7 @@
             <tr><td colspan="9">Nenhum jogo ao vivo encontrado agora.</td></tr>
           <% } %>
           <% liveEntries.matches.forEach((match) => { %>
+            <% const statsLine = match.statsEstimated ? "Sem estatisticas reais do SofaScore" : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.`; %>
             <tr>
               <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><br><small><%= match.sofaScoreStatus || `${match.minute}'` %></small></td>
               <td><%= match.league %></td>
@@ -146,7 +147,7 @@
               <td><strong><%= match.liveOdd %></strong></td>
               <td><small>1 <%= match.odds1x2?.home || "-" %> | X <%= match.odds1x2?.draw || "-" %> | 2 <%= match.odds1x2?.away || "-" %></small></td>
               <td><span class="live-score-badge table-score"><%= match.funnelScore %></span><br><small><%= match.classification %></small></td>
-              <td><strong><%= match.pressure %></strong><br><small><%= match.stats.totalShots %> fin. | <%= match.stats.shotsOnTarget %> alvo | <%= match.stats.corners %> esc.<%= match.statsEstimated ? " | estimado" : "" %></small></td>
+              <td><strong><%= match.pressure %></strong><br><small><%= statsLine %></small></td>
               <td><a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer"><%= match.source === "browser_sofascore" ? "SofaScore" : "Betano" %></a></td>
             </tr>
           <% }) %>
@@ -179,6 +180,12 @@
         '"': "&quot;",
         "'": "&#039;"
       })[char]);
+    }
+
+    function statsLine(match) {
+      return match.statsEstimated
+        ? "Sem estatisticas reais do SofaScore"
+        : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.`;
     }
 
     function render(data) {
@@ -247,7 +254,7 @@
           <td><strong>${escapeHtml(match.liveOdd)}</strong></td>
           <td><small>1 ${escapeHtml(match.odds1x2?.home || "-")} | X ${escapeHtml(match.odds1x2?.draw || "-")} | 2 ${escapeHtml(match.odds1x2?.away || "-")}</small></td>
           <td><span class="live-score-badge table-score">${match.funnelScore}</span><br><small>${escapeHtml(match.classification)}</small></td>
-          <td><strong>${escapeHtml(match.pressure)}</strong><br><small>${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.${match.statsEstimated ? " | estimado" : ""}</small></td>
+          <td><strong>${escapeHtml(match.pressure)}</strong><br><small>${escapeHtml(statsLine(match))}</small></td>
           <td><a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">${match.source === "browser_sofascore" ? "SofaScore" : "Betano"}</a></td>
         </tr>
       `).join("") : `<tr><td colspan="9">Nenhum jogo ao vivo encontrado agora.</td></tr>`;

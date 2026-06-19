@@ -130,20 +130,91 @@ function isLiveSofaScoreEvent(event = {}) {
   return false;
 }
 
-function buildEstimatedStats(game) {
-  const minute = Number(game.minute || 0);
-  const goals = Number(game.homeScore || 0) + Number(game.awayScore || 0);
-  const live = (minute > 0 || game.statusLabel === "Ao vivo" || game.statusLabel === "Intervalo") && game.statusLabel !== "Finalizado";
+function emptyStats(extra = {}) {
   return {
-    totalShots: live ? Math.max(0, Math.round(Math.max(minute, 8) / 5) + goals * 2) : 0,
-    shotsOnTarget: live ? Math.max(0, Math.round(Math.max(minute, 8) / 14) + goals) : 0,
-    corners: live ? Math.max(0, Math.round(Math.max(minute, 8) / 16)) : 0,
-    dangerousAttacks: live ? Math.max(0, Math.round(Math.max(minute, 8) * 0.75)) : 0,
+    totalShots: 0,
+    shotsOnTarget: 0,
+    corners: 0,
+    dangerousAttacks: 0,
     possessionHome: 50,
     yellowCards: 0,
     redCards: 0,
-    estimated: true
+    estimated: true,
+    unavailable: true,
+    source: "unavailable",
+    ...extra
   };
+}
+
+function numberValue(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = Number(String(value).replace("%", "").replace(",", ".").trim());
+  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+}
+
+function statSideValue(item = {}, side) {
+  const candidates = side === "home"
+    ? [item.home, item.homeValue, item.homeTotal, item.homeScore]
+    : [item.away, item.awayValue, item.awayTotal, item.awayScore];
+  return numberValue(candidates.find((value) => value !== null && value !== undefined && value !== ""));
+}
+
+function parseSofaScoreStatistics(payload = {}) {
+  const stats = emptyStats({ estimated: false, unavailable: false, source: "sofascore_statistics" });
+  let mappedItems = 0;
+  const groups = Array.isArray(payload.statistics) ? payload.statistics : [];
+  groups.forEach((group) => {
+    (group.groups || []).forEach((statsGroup) => {
+      (statsGroup.statisticsItems || []).forEach((item) => {
+        const name = normalizeKey(item.name || item.key || item.title || "");
+        const home = statSideValue(item, "home");
+        const away = statSideValue(item, "away");
+        const total = home + away;
+        if (!name) return;
+
+        if (name.includes("shots on target") || name.includes("chutes no alvo") || name.includes("finalizacoes no alvo")) {
+          stats.shotsOnTarget += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("total shots") || name === "shots" || name.includes("finalizacoes") || name.includes("chutes")) {
+          stats.totalShots += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("corner") || name.includes("escanteio")) {
+          stats.corners += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("dangerous attacks") || name.includes("ataques perigosos")) {
+          stats.dangerousAttacks += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("yellow") || name.includes("amarelo")) {
+          stats.yellowCards += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("red") || name.includes("vermelho")) {
+          stats.redCards += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("ball possession") || name.includes("posse de bola")) {
+          stats.possessionHome = home || stats.possessionHome;
+          mappedItems += 1;
+        }
+      });
+    });
+  });
+
+  if (!stats.dangerousAttacks && (stats.totalShots || stats.corners)) {
+    stats.dangerousAttacks = Math.round(stats.totalShots * 2.2 + stats.corners * 2);
+  }
+
+  return mappedItems ? stats : emptyStats();
 }
 
 function inferOddsFromText(text = "") {
@@ -208,12 +279,7 @@ function enrichGames(games = [], sideCards = []) {
         href: game.href || null,
         rawText: game.rawText || null,
         rawLines: game.rawLines || [],
-        stats: buildEstimatedStats({
-          minute,
-          statusLabel,
-          homeScore: homeScore || 0,
-          awayScore: awayScore || 0
-        }),
+        stats: game.stats || emptyStats(),
         source: "browser_sofascore"
       };
     })
@@ -460,6 +526,40 @@ async function fetchLiveEventsFromPage(page) {
   });
 }
 
+async function fetchGameStatisticsFromPage(page, eventId) {
+  if (!eventId) return emptyStats();
+  try {
+    const payload = await page.evaluate(async (id) => {
+      const response = await fetch(`/api/v1/event/${id}/statistics`, {
+        headers: {
+          "accept": "application/json,text/plain,*/*"
+        }
+      });
+      if (!response.ok) return null;
+      return response.json();
+    }, String(eventId));
+    return parseSofaScoreStatistics(payload || {});
+  } catch {
+    return emptyStats();
+  }
+}
+
+async function attachRealStatistics(page, games = []) {
+  const maxStats = Math.max(1, Number(process.env.SOFASCORE_BROWSER_MAX_STATS_FETCH || 40));
+  const delayMs = Math.max(0, Number(process.env.SOFASCORE_BROWSER_STATS_DELAY_MS || 250));
+  const enriched = [];
+  for (const game of games) {
+    if (enriched.length >= maxStats) {
+      enriched.push({ ...game, stats: game.stats || emptyStats() });
+      continue;
+    }
+    const stats = await fetchGameStatisticsFromPage(page, game.eventId);
+    enriched.push({ ...game, stats });
+    if (delayMs) await page.waitForTimeout(delayMs);
+  }
+  return enriched;
+}
+
 async function runSofaScoreBrowserProbe(options = {}) {
   const startedAt = new Date().toISOString();
   const url = options.url || process.env.SOFASCORE_BROWSER_URL || DEFAULT_SOFASCORE_URL;
@@ -666,7 +766,10 @@ async function runSofaScoreBrowserProbe(options = {}) {
     if ((response?.status && response.status() >= 400) || payload.textLength < 100 || lines.some((line) => /forbidden|\"code\":\s*403/i.test(line))) {
       throw new Error(`SofaScore bloqueou a leitura do navegador${response?.status ? `: HTTP ${response.status()}` : ""}.`);
     }
-    const games = enrichGames(payload.games?.length ? payload.games : inferGamesFromLines(lines), payload.sideCards);
+    const games = await attachRealStatistics(
+      page,
+      enrichGames(payload.games?.length ? payload.games : inferGamesFromLines(lines), payload.sideCards)
+    );
     await browser.close();
     return {
       ok: true,

@@ -128,7 +128,7 @@ async function buildSofaScoreMatch(baseUrl, event) {
 async function fetchSofaScoreStatistics(baseUrl, eventId) {
   try {
     const payload = await sofaScoreGet(baseUrl, `/event/${eventId}/statistics`);
-    const stats = emptyStats();
+    const stats = emptyStats({ estimated: false, unavailable: false, source: "sofascore_statistics" });
     const groups = Array.isArray(payload.statistics) ? payload.statistics : [];
     groups.forEach((group) => {
       (group.groups || []).forEach((statsGroup) => {
@@ -216,7 +216,7 @@ async function buildApiFootballMatch(baseUrl, apiKey, item) {
 async function fetchFixtureStatistics(baseUrl, fixtureId, apiKey) {
   try {
     const payload = await apiGet(baseUrl, "/fixtures/statistics", { fixture: fixtureId }, apiKey);
-    const stats = emptyStats();
+    const stats = emptyStats({ estimated: false, unavailable: false, source: "api_football_statistics" });
     const teams = Array.isArray(payload.response) ? payload.response : [];
     teams.forEach((teamStats, teamIndex) => {
       (teamStats.statistics || []).forEach((item) => {
@@ -306,14 +306,16 @@ function buildDemoMatches() {
 
 function buildMatch(input) {
   const stats = { ...emptyStats(), ...input.stats };
-  const pressure = pressureLabel(stats.possessionHome);
+  const statsUnavailable = Boolean(stats.estimated || stats.unavailable);
+  const pressure = statsUnavailable ? "sem estatisticas reais" : pressureLabel(stats.possessionHome);
   const score = liveFunnelScore({
     minute: input.minute,
     homeScore: input.homeScore,
     awayScore: input.awayScore,
     liveOdd: input.liveOdd,
     ...stats,
-    pressure
+    pressure,
+    statsUnavailable
   });
   const recommendation = buildEntryRecommendation(input, score);
   return {
@@ -358,6 +360,9 @@ function buildEntryRecommendation(input, score) {
 function liveFunnelScore(match) {
   let score = 0;
   const reasons = [];
+  if (match.statsUnavailable) {
+    reasons.push("estatisticas reais indisponiveis");
+  }
   if (match.minute >= 15 && match.minute <= 35) {
     score += 10;
     reasons.push("minuto ideal");
@@ -393,6 +398,10 @@ function liveFunnelScore(match) {
 
   if (match.homeScore + match.awayScore > 1) {
     reasons.push("placar fora da janela");
+  }
+
+  if (match.statsUnavailable) {
+    score = Math.min(score, 45);
   }
 
   const classification = score >= 85 ? "entrada encontrada" : score >= 75 ? "possivel entrada" : score >= 60 ? "observar" : "sem entrada";
@@ -453,7 +462,7 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
     match.odds1x2 = game.odds1x2 || null;
     match.eventId = game.eventId || null;
     match.link = sofaScorePublicLink(game.href);
-    match.statsEstimated = Boolean(game.stats?.estimated);
+    match.statsEstimated = Boolean(match.stats?.estimated || match.stats?.unavailable || game.stats?.estimated || game.stats?.unavailable);
     return match;
   });
   const signals = matches
@@ -521,7 +530,7 @@ function sofaScorePublicLink(href) {
   }
 }
 
-function emptyStats() {
+function emptyStats(extra = {}) {
   return {
     totalShots: 0,
     shotsOnTarget: 0,
@@ -529,7 +538,10 @@ function emptyStats() {
     dangerousAttacks: 0,
     possessionHome: 50,
     yellowCards: 0,
-    redCards: 0
+    redCards: 0,
+    estimated: true,
+    unavailable: true,
+    ...extra
   };
 }
 
