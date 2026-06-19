@@ -151,15 +151,34 @@ function isLiveSofaScoreEvent(event = {}) {
 function emptyStats(extra = {}) {
   return {
     totalShots: 0,
+    homeTotalShots: 0,
+    awayTotalShots: 0,
     shotsOnTarget: 0,
+    homeShotsOnTarget: 0,
+    awayShotsOnTarget: 0,
+    shotsOffTarget: 0,
+    blockedShots: 0,
     corners: 0,
+    homeCorners: 0,
+    awayCorners: 0,
     dangerousAttacks: 0,
+    attacks: 0,
     possessionHome: 50,
+    possessionAway: 50,
     yellowCards: 0,
     redCards: 0,
+    goalkeeperSaves: 0,
+    fouls: 0,
+    offsides: 0,
+    bigChances: 0,
+    expectedGoals: 0,
+    expectedGoalsHome: 0,
+    expectedGoalsAway: 0,
+    statsItemsMapped: 0,
     estimated: true,
     unavailable: true,
     source: "unavailable",
+    sourceDetail: null,
     ...extra
   };
 }
@@ -170,11 +189,24 @@ function numberValue(value) {
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 }
 
+function decimalValue(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const parsed = Number(String(value).replace("%", "").replace(",", ".").trim());
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
+}
+
 function statSideValue(item = {}, side) {
   const candidates = side === "home"
     ? [item.homeValue, item.homeTotal, item.homeScore, item.home]
     : [item.awayValue, item.awayTotal, item.awayScore, item.away];
   return numberValue(candidates.find((value) => value !== null && value !== undefined && value !== ""));
+}
+
+function statSideDecimal(item = {}, side) {
+  const candidates = side === "home"
+    ? [item.homeValue, item.homeTotal, item.homeScore, item.home]
+    : [item.awayValue, item.awayTotal, item.awayScore, item.away];
+  return decimalValue(candidates.find((value) => value !== null && value !== undefined && value !== ""));
 }
 
 function collectStatisticItems(value, output = [], seen = new Set()) {
@@ -199,10 +231,58 @@ function collectStatisticItems(value, output = [], seen = new Set()) {
   return output;
 }
 
-function parseSofaScoreStatistics(payload = {}) {
-  const stats = emptyStats({ estimated: false, unavailable: false, source: "sofascore_statistics" });
+function statisticsPayloadCandidates(payload = {}, sourceDetail = "sofascore_statistics") {
+  if (!payload) return [];
+  if (Array.isArray(payload)) {
+    return payload.flatMap((item, index) =>
+      statisticsPayloadCandidates(item?.json || item, item?.path || `${sourceDetail}[${index}]`)
+    );
+  }
+  if (Array.isArray(payload.statistics) && payload.statistics.length) {
+    return payload.statistics.map((period, index) => ({
+      value: period,
+      sourceDetail: [
+        sourceDetail,
+        period.period,
+        period.periodName,
+        period.groupName,
+        `period-${index + 1}`
+      ].filter(Boolean).join(":")
+    }));
+  }
+  return [{ value: payload, sourceDetail }];
+}
+
+function addStatsPair(stats, totalKey, homeKey, awayKey, home, away) {
+  stats[homeKey] = (stats[homeKey] || 0) + home;
+  stats[awayKey] = (stats[awayKey] || 0) + away;
+  stats[totalKey] = (stats[totalKey] || 0) + home + away;
+}
+
+function statsCandidateScore(stats = {}) {
+  if (stats.unavailable) return 0;
+  const base =
+    stats.totalShots * 10 +
+    stats.shotsOnTarget * 14 +
+    stats.corners * 8 +
+    stats.dangerousAttacks +
+    stats.bigChances * 10 +
+    stats.expectedGoals * 10 +
+    stats.statsItemsMapped;
+  const detail = normalizeKey(stats.sourceDetail || "");
+  const periodBonus = /all|todos|total|match|partida/.test(detail) ? 10000 : 0;
+  return periodBonus + base;
+}
+
+function parseSofaScoreStatisticsCandidate(candidate = {}) {
+  const stats = emptyStats({
+    estimated: false,
+    unavailable: false,
+    source: "sofascore_statistics",
+    sourceDetail: candidate.sourceDetail || "sofascore_statistics"
+  });
   let mappedItems = 0;
-  const items = collectStatisticItems(payload);
+  const items = collectStatisticItems(candidate.value || {});
   items.forEach((item) => {
         const name = normalizeKey(item.name || item.key || item.title || "");
         const home = statSideValue(item, "home");
@@ -210,23 +290,67 @@ function parseSofaScoreStatistics(payload = {}) {
         const total = home + away;
         if (!name) return;
 
+        if (name.includes("expected goals") || name.includes("gols esperados") || name === "xg" || name.includes(" xg")) {
+          const homeDecimal = statSideDecimal(item, "home");
+          const awayDecimal = statSideDecimal(item, "away");
+          stats.expectedGoalsHome += homeDecimal;
+          stats.expectedGoalsAway += awayDecimal;
+          stats.expectedGoals += homeDecimal + awayDecimal;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("big chances") || name.includes("grandes chances")) {
+          stats.bigChances += total;
+          mappedItems += 1;
+          return;
+        }
         if (name.includes("shots on target") || name.includes("on target") || name.includes("chutes no alvo") || name.includes("finalizacoes no alvo")) {
-          stats.shotsOnTarget += total;
+          addStatsPair(stats, "shotsOnTarget", "homeShotsOnTarget", "awayShotsOnTarget", home, away);
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("shots off target") || name.includes("off target") || name.includes("chutes para fora") || name.includes("finalizacoes para fora")) {
+          stats.shotsOffTarget += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("blocked shots") || name.includes("chutes bloqueados") || name.includes("finalizacoes bloqueadas")) {
+          stats.blockedShots += total;
           mappedItems += 1;
           return;
         }
         if (name.includes("total shots") || name === "shots" || name.includes("shot attempts") || name.includes("finalizacoes") || name.includes("chutes")) {
-          stats.totalShots += total;
+          addStatsPair(stats, "totalShots", "homeTotalShots", "awayTotalShots", home, away);
           mappedItems += 1;
           return;
         }
         if (name.includes("corner") || name.includes("escanteio")) {
-          stats.corners += total;
+          addStatsPair(stats, "corners", "homeCorners", "awayCorners", home, away);
           mappedItems += 1;
           return;
         }
         if (name.includes("dangerous attacks") || name.includes("ataques perigosos")) {
           stats.dangerousAttacks += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name === "attacks" || name.includes("ataques")) {
+          stats.attacks += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("goalkeeper saves") || name.includes("defesas do goleiro") || name.includes("defesas")) {
+          stats.goalkeeperSaves += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("fouls") || name.includes("faltas")) {
+          stats.fouls += total;
+          mappedItems += 1;
+          return;
+        }
+        if (name.includes("offsides") || name.includes("impedimentos")) {
+          stats.offsides += total;
           mappedItems += 1;
           return;
         }
@@ -242,6 +366,7 @@ function parseSofaScoreStatistics(payload = {}) {
         }
         if (name.includes("ball possession") || name.includes("posse de bola")) {
           stats.possessionHome = home || stats.possessionHome;
+          stats.possessionAway = away || (home ? 100 - home : stats.possessionAway);
           mappedItems += 1;
         }
   });
@@ -249,8 +374,24 @@ function parseSofaScoreStatistics(payload = {}) {
   if (!stats.dangerousAttacks && (stats.totalShots || stats.corners)) {
     stats.dangerousAttacks = Math.round(stats.totalShots * 2.2 + stats.corners * 2);
   }
+  if (!stats.totalShots && (stats.shotsOnTarget || stats.shotsOffTarget || stats.blockedShots)) {
+    stats.totalShots = stats.shotsOnTarget + stats.shotsOffTarget + stats.blockedShots;
+  }
+  stats.expectedGoals = Math.round(stats.expectedGoals * 100) / 100;
+  stats.expectedGoalsHome = Math.round(stats.expectedGoalsHome * 100) / 100;
+  stats.expectedGoalsAway = Math.round(stats.expectedGoalsAway * 100) / 100;
+  stats.statsItemsMapped = mappedItems;
 
   return mappedItems ? stats : emptyStats();
+}
+
+function parseSofaScoreStatistics(payload = {}) {
+  const candidates = statisticsPayloadCandidates(payload);
+  const parsed = candidates
+    .map(parseSofaScoreStatisticsCandidate)
+    .filter((stats) => !stats.unavailable);
+  if (!parsed.length) return emptyStats();
+  return parsed.sort((a, b) => statsCandidateScore(b) - statsCandidateScore(a))[0];
 }
 
 function numberNearLabel(lines, labelPatterns) {
@@ -258,17 +399,20 @@ function numberNearLabel(lines, labelPatterns) {
   for (let index = 0; index < normalizedLines.length; index += 1) {
     const key = normalizeKey(normalizedLines[index]);
     if (!labelPatterns.some((pattern) => key.includes(pattern))) continue;
-    const candidates = [
-      normalizedLines[index - 2],
-      normalizedLines[index - 1],
-      normalizedLines[index + 1],
-      normalizedLines[index + 2]
+    const pairs = [
+      [normalizedLines[index - 1], normalizedLines[index + 1]],
+      [normalizedLines[index - 2], normalizedLines[index + 2]]
     ];
-    const values = candidates
-      .map((value) => onlyNumber(String(value || "").replace("%", "")))
-      .filter((value) => value !== null && value >= 0);
-    if (values.length >= 2) return values[0] + values[1];
-    if (values.length === 1) return values[0];
+    for (const pair of pairs) {
+      const values = pair
+        .map((value) => onlyNumber(String(value || "").replace("%", "")))
+        .filter((value) => value !== null && value >= 0);
+      if (values.length >= 2) return values[0] + values[1];
+    }
+    const value = [normalizedLines[index - 1], normalizedLines[index + 1], normalizedLines[index - 2], normalizedLines[index + 2]]
+      .map((item) => onlyNumber(String(item || "").replace("%", "")))
+      .find((item) => item !== null && item >= 0);
+    if (value !== undefined) return value;
   }
   return 0;
 }
@@ -293,24 +437,34 @@ function sidePercentNearLabel(lines, labelPatterns) {
 function parseVisualStatisticsLines(lines = []) {
   const totalShots = numberNearLabel(lines, ["finalizacoes", "total shots"]);
   const shotsOnTarget = numberNearLabel(lines, ["finalizacoes no alvo", "shots on target"]);
+  const shotsOffTarget = numberNearLabel(lines, ["finalizacoes para fora", "shots off target"]);
+  const blockedShots = numberNearLabel(lines, ["finalizacoes bloqueadas", "blocked shots"]);
   const corners = numberNearLabel(lines, ["escanteios", "corner"]);
   const dangerousAttacks = numberNearLabel(lines, ["ataques perigosos", "dangerous attacks"]);
   const yellowCards = numberNearLabel(lines, ["cartoes amarelos", "yellow cards"]);
   const redCards = numberNearLabel(lines, ["cartoes vermelhos", "red cards"]);
+  const bigChances = numberNearLabel(lines, ["grandes chances", "big chances"]);
   const possessionHome = sidePercentNearLabel(lines, ["posse de bola", "ball possession"]);
-  const hasRealStats = totalShots || shotsOnTarget || corners || dangerousAttacks || yellowCards || redCards;
+  const possessionAway = possessionHome ? 100 - possessionHome : 50;
+  const hasRealStats = totalShots || shotsOnTarget || shotsOffTarget || blockedShots || corners || dangerousAttacks || yellowCards || redCards || bigChances;
   if (!hasRealStats) return emptyStats();
+  const calculatedTotalShots = totalShots || shotsOnTarget + shotsOffTarget + blockedShots;
   return {
-    totalShots,
+    totalShots: calculatedTotalShots,
     shotsOnTarget,
+    shotsOffTarget,
+    blockedShots,
     corners,
-    dangerousAttacks: dangerousAttacks || Math.round(totalShots * 2.2 + corners * 2),
+    dangerousAttacks: dangerousAttacks || Math.round(calculatedTotalShots * 2.2 + corners * 2),
     possessionHome,
+    possessionAway,
     yellowCards,
     redCards,
+    bigChances,
     estimated: false,
     unavailable: false,
-    source: "sofascore_visual_statistics"
+    source: "sofascore_visual_statistics",
+    sourceDetail: "visual_statistics_tab"
   };
 }
 
@@ -675,7 +829,7 @@ async function fetchGameStatisticsFromPage(page, eventId) {
           });
           if (!response.ok) continue;
           const json = await response.json();
-          if (json) results.push(json);
+          if (json) results.push({ path, json });
         } catch {
           // Try next statistics endpoint variant.
         }
@@ -1053,5 +1207,9 @@ async function runSofaScoreBrowserProbe(options = {}) {
 }
 
 module.exports = {
-  runSofaScoreBrowserProbe
+  runSofaScoreBrowserProbe,
+  __private: {
+    parseSofaScoreStatistics,
+    parseVisualStatisticsLines
+  }
 };

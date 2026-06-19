@@ -293,7 +293,8 @@ function startSofaScoreAutoMonitor(store, options = {}) {
         .slice(0, 8)
         .map((game) => `${game.homeTeam || "?"} ${game.status || "-"} ${game.statusLabel || ""}`.trim())
         .join(" | ");
-      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}`);
+      const statsCount = (snapshot.games || []).filter((game) => game.stats && !game.stats.estimated && !game.stats.unavailable).length;
+      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}. Estatisticas: ${statsCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}`);
     } catch (error) {
       console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
     } finally {

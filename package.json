@@ -11,6 +11,7 @@
     "reset:production": "node scripts/reset-production-data.js",
     "test:sofascore-browser": "node scripts/test-sofascore-browser.js",
     "test:sofascore-normalization": "node scripts/test-sofascore-normalization.js",
+    "test:sofascore-statistics": "node scripts/test-sofascore-statistics.js",
     "start": "node server.js"
   },
   "dependencies": {
