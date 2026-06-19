@@ -270,7 +270,8 @@ function enrichGames(games = [], sideCards = []) {
   }));
   return games
     .map((game, index) => {
-      const status = normalizeLine(game.status || "-");
+      let status = normalizeLine(game.status || "-");
+      if (/^\d{1,3}$/.test(status) && game.source !== "api_event_detail") status = `${status}'`;
       const statusLabel = gameStatusLabel(status);
       const minute = minuteFromStatus(status);
       const homeScore = onlyNumber(game.homeScore ?? String(game.score || "").split("x")[0]);
@@ -615,8 +616,9 @@ async function attachRealStatistics(page, games = []) {
     enriched.push({
       ...game,
       ...(details || {}),
-      statusLabel: details ? gameStatusLabel(details.status || game.status || game.statusLabel) : game.statusLabel,
-      minute: details?.status ? minuteFromStatus(details.status) || game.minute || 0 : game.minute || 0,
+      status: details?.status && minuteFromStatus(details.status) ? details.status : game.status,
+      statusLabel: gameStatusLabel((details?.status && minuteFromStatus(details.status) ? details.status : game.status) || game.statusLabel),
+      minute: details?.status && minuteFromStatus(details.status) ? minuteFromStatus(details.status) : game.minute || 0,
       stats,
       rawText: details?.rawText || game.rawText || null,
       rawLines: details?.rawLines?.length ? details.rawLines : game.rawLines || []
@@ -736,7 +738,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
         const teamLines = teamBox?.lines?.length >= 2 ? teamBox.lines : rowLines.filter(isTeamLine).slice(-2);
         const homeTeam = teamLines[0] || rowLines[2] || "Mandante";
         const awayTeam = teamLines[1] || rowLines[3] || "Visitante";
-        const statusLine = timeStatusLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line)) ||
+        const statusLine = timeStatusLines.find((line) => /^(HT|FT|INT|-|\d{1,3}|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line)) ||
           rowLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line));
         const timeLine = timeStatusLines.find((line) => /^\d{1,2}:\d{2}$/.test(line)) ||
           rowLines.find((line) => /^\d{1,2}:\d{2}$/.test(line));
