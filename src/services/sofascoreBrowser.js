@@ -25,8 +25,10 @@ function onlyNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function isMinuteStatus(value) {
-  return /^\d{1,3}(\+\d{1,2})?'?$/.test(normalizeLine(value));
+function isMinuteStatus(value, options = {}) {
+  const normalized = normalizeLine(value);
+  if (options.allowPlain) return /^\d{1,3}(\+\d{1,2})?'?$/.test(normalized);
+  return /^\d{1,3}(\+\d{1,2})'$/.test(normalized);
 }
 
 function likelyFootballLines(lines) {
@@ -52,8 +54,8 @@ function likelyFootballLines(lines) {
 function inferGamesFromLines(lines) {
   const games = [];
   const invalidTeams = new Set(["ENTRAR", "Em Tendencia", "Futebol", "Favoritos", "Competicoes", "Hoje"]);
-  const isTime = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|\d{1,3}'?|Ao vivo)$/i.test(line);
-  const isStatus = (line) => /^(-|HT|FT|INT|AET|PEN|\d{1,3}'?|Ao vivo)$/i.test(line);
+  const isTime = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|\d{1,3}'|Ao vivo)$/i.test(line);
+  const isStatus = (line) => /^(-|HT|FT|INT|AET|PEN|\d{1,3}'|Ao vivo)$/i.test(line);
   const isScore = (line) => /^\d{1,2}$/.test(line);
   const isTeam = (line) =>
     /^[\p{L}\d .,'&()-]{2,}$/u.test(line) &&
@@ -120,7 +122,7 @@ function isLiveSofaScoreEvent(event = {}) {
   const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
   if (/finished|ended|after|notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return false;
   if (/half.?time|interval|intervalo|break/i.test(description)) return true;
-  if (isMinuteStatus(statusTime)) return true;
+  if (isMinuteStatus(statusTime, { allowPlain: true })) return true;
   const periodStart = Number(event.time?.currentPeriodStartTimestamp || 0);
   if (periodStart > 0) {
     const elapsedMinutes = Math.floor((Date.now() / 1000 - periodStart) / 60);
@@ -154,30 +156,50 @@ function numberValue(value) {
 
 function statSideValue(item = {}, side) {
   const candidates = side === "home"
-    ? [item.home, item.homeValue, item.homeTotal, item.homeScore]
-    : [item.away, item.awayValue, item.awayTotal, item.awayScore];
+    ? [item.homeValue, item.homeTotal, item.homeScore, item.home]
+    : [item.awayValue, item.awayTotal, item.awayScore, item.away];
   return numberValue(candidates.find((value) => value !== null && value !== undefined && value !== ""));
+}
+
+function collectStatisticItems(value, output = [], seen = new Set()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return output;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      if (item && typeof item === "object" && (item.name || item.key || item.title) && (
+        item.home !== undefined ||
+        item.away !== undefined ||
+        item.homeValue !== undefined ||
+        item.awayValue !== undefined
+      )) {
+        output.push(item);
+      } else {
+        collectStatisticItems(item, output, seen);
+      }
+    });
+    return output;
+  }
+  Object.values(value).forEach((item) => collectStatisticItems(item, output, seen));
+  return output;
 }
 
 function parseSofaScoreStatistics(payload = {}) {
   const stats = emptyStats({ estimated: false, unavailable: false, source: "sofascore_statistics" });
   let mappedItems = 0;
-  const groups = Array.isArray(payload.statistics) ? payload.statistics : [];
-  groups.forEach((group) => {
-    (group.groups || []).forEach((statsGroup) => {
-      (statsGroup.statisticsItems || []).forEach((item) => {
+  const items = collectStatisticItems(payload);
+  items.forEach((item) => {
         const name = normalizeKey(item.name || item.key || item.title || "");
         const home = statSideValue(item, "home");
         const away = statSideValue(item, "away");
         const total = home + away;
         if (!name) return;
 
-        if (name.includes("shots on target") || name.includes("chutes no alvo") || name.includes("finalizacoes no alvo")) {
+        if (name.includes("shots on target") || name.includes("on target") || name.includes("chutes no alvo") || name.includes("finalizacoes no alvo")) {
           stats.shotsOnTarget += total;
           mappedItems += 1;
           return;
         }
-        if (name.includes("total shots") || name === "shots" || name.includes("finalizacoes") || name.includes("chutes")) {
+        if (name.includes("total shots") || name === "shots" || name.includes("shot attempts") || name.includes("finalizacoes") || name.includes("chutes")) {
           stats.totalShots += total;
           mappedItems += 1;
           return;
@@ -206,8 +228,6 @@ function parseSofaScoreStatistics(payload = {}) {
           stats.possessionHome = home || stats.possessionHome;
           mappedItems += 1;
         }
-      });
-    });
   });
 
   if (!stats.dangerousAttacks && (stats.totalShots || stats.corners)) {
@@ -358,7 +378,7 @@ function statusFromSofaScoreEvent(event) {
   if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
   if (/finished|ended|after/i.test(description)) return "FT";
   if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
-  if (isMinuteStatus(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+  if (isMinuteStatus(statusTime, { allowPlain: true })) return `${statusTime.replace(/[^\d+]/g, "")}'`;
   const start = Number(event.time?.currentPeriodStartTimestamp || 0);
   if (start > 0) {
     const minute = Math.floor((Date.now() / 1000 - start) / 60);
@@ -530,7 +550,42 @@ async function fetchGameStatisticsFromPage(page, eventId) {
   if (!eventId) return emptyStats();
   try {
     const payload = await page.evaluate(async (id) => {
-      const response = await fetch(`/api/v1/event/${id}/statistics`, {
+      const paths = [
+        `/api/v1/event/${id}/statistics`,
+        `/api/v1/event/${id}/statistics?period=ALL`,
+        `/api/v1/event/${id}/statistics?period=1ST`,
+        `/api/v1/event/${id}/statistics?period=2ND`
+      ];
+      const results = [];
+      for (const path of paths) {
+        try {
+          const response = await fetch(path, {
+            credentials: "include",
+            headers: {
+              "accept": "application/json,text/plain,*/*"
+            }
+          });
+          if (!response.ok) continue;
+          const json = await response.json();
+          if (json) results.push(json);
+        } catch {
+          // Try next statistics endpoint variant.
+        }
+      }
+      return results.length ? results : null;
+    }, String(eventId));
+    return parseSofaScoreStatistics(payload || {});
+  } catch {
+    return emptyStats();
+  }
+}
+
+async function fetchGameDetailsFromPage(page, eventId) {
+  if (!eventId) return null;
+  try {
+    const payload = await page.evaluate(async (id) => {
+      const response = await fetch(`/api/v1/event/${id}`, {
+        credentials: "include",
         headers: {
           "accept": "application/json,text/plain,*/*"
         }
@@ -538,9 +593,11 @@ async function fetchGameStatisticsFromPage(page, eventId) {
       if (!response.ok) return null;
       return response.json();
     }, String(eventId));
-    return parseSofaScoreStatistics(payload || {});
+    const event = payload?.event || payload;
+    const [game] = event?.homeTeam && event?.awayTeam ? mapSofaScoreEventsToGames([event], "api_event_detail") : [];
+    return game || null;
   } catch {
-    return emptyStats();
+    return null;
   }
 }
 
@@ -553,8 +610,15 @@ async function attachRealStatistics(page, games = []) {
       enriched.push({ ...game, stats: game.stats || emptyStats() });
       continue;
     }
+    const details = await fetchGameDetailsFromPage(page, game.eventId);
     const stats = await fetchGameStatisticsFromPage(page, game.eventId);
-    enriched.push({ ...game, stats });
+    enriched.push({
+      ...game,
+      ...(details || {}),
+      stats,
+      rawText: details?.rawText || game.rawText || null,
+      rawLines: details?.rawLines?.length ? details.rawLines : game.rawLines || []
+    });
     if (delayMs) await page.waitForTimeout(delayMs);
   }
   return enriched;
@@ -613,7 +677,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
       const clean = (value = "") => String(value).replace(/\s+/g, " ").trim();
       const lines = document.body.innerText.split("\n");
       const eventLinks = Array.from(document.querySelectorAll('a[class*="event-hl-"]'));
-      const isTimeOrStatus = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|-|\d{1,3}'?|Ao vivo|Intervalo)$/i.test(line);
+      const isTimeOrStatus = (line) => /^(\d{1,2}:\d{2}|HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line);
       const isScore = (line) => /^\d{1,2}$/.test(line);
       const isTeamLine = (line) =>
         /^[\p{L}\d .,'&()-]{2,}$/u.test(line) &&
@@ -662,7 +726,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
             String(item.className).includes("ov_hidden") &&
             String(item.className).includes("min-w_") &&
             lines.length >= 2 &&
-            lines.every((line) => !/^\d+$/.test(line) && !/^(\d{1,2}:\d{2}|FT|HT|INT|-|\d{1,3}'?|Ao vivo|Intervalo)$/i.test(line))
+            lines.every((line) => !/^\d+$/.test(line) && !/^(\d{1,2}:\d{2}|FT|HT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line))
           );
         const scoreBox = divs.find((item) => String(item.className).includes("w_[38px]"));
         const scoreLines = textLines(scoreBox).filter((line) => /^\d{1,2}$/.test(line));
@@ -670,8 +734,8 @@ async function runSofaScoreBrowserProbe(options = {}) {
         const teamLines = teamBox?.lines?.length >= 2 ? teamBox.lines : rowLines.filter(isTeamLine).slice(-2);
         const homeTeam = teamLines[0] || rowLines[2] || "Mandante";
         const awayTeam = teamLines[1] || rowLines[3] || "Visitante";
-        const statusLine = timeStatusLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'?|Ao vivo|Intervalo)$/i.test(line)) ||
-          rowLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'?|Ao vivo|Intervalo)$/i.test(line));
+        const statusLine = timeStatusLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line)) ||
+          rowLines.find((line) => /^(HT|FT|INT|-|\d{1,3}'|Ao vivo|Intervalo)$/i.test(line));
         const timeLine = timeStatusLines.find((line) => /^\d{1,2}:\d{2}$/.test(line)) ||
           rowLines.find((line) => /^\d{1,2}:\d{2}$/.test(line));
         const section = sectionInfo(link, homeTeam, awayTeam);
