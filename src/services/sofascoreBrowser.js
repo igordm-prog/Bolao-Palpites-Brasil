@@ -842,40 +842,97 @@ async function fetchGameStatisticsFromPage(page, eventId) {
   }
 }
 
-function statisticsUrlForGame(game = {}) {
-  const raw = String(game.href || "").trim();
-  if (!raw) return null;
-  try {
-    const url = new URL(raw);
-    if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
-    const hash = url.hash || (game.eventId ? `#id:${game.eventId}` : "");
-    url.hash = hash.includes("tab:statistics")
-      ? hash
-      : `${hash.replace(/,tab:[^,]+/g, "")},tab:statistics`;
-    return url.toString();
-  } catch {
-    return null;
+async function clickEventInCurrentList(page, game = {}) {
+  const eventId = String(game.eventId || "").trim();
+  const homeTeam = normalizeLine(game.homeTeam || "");
+  const awayTeam = normalizeLine(game.awayTeam || "");
+  if (!eventId && (!homeTeam || !awayTeam)) return false;
+
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const clicked = await page.evaluate(({ eventId, homeTeam, awayTeam, attempt }) => {
+      if (attempt === 0) window.scrollTo(0, 0);
+
+      const clean = (value = "") => String(value).replace(/\s+/g, " ").trim();
+      const links = Array.from(document.querySelectorAll('a[href], a[class*="event-hl-"]'));
+      const target = links.find((link) => {
+        const href = String(link.href || "");
+        const className = String(link.className || "");
+        const text = clean(link.innerText || link.textContent || "");
+        if (eventId && (href.includes(`#id:${eventId}`) || href.includes(eventId) || className.includes(`event-hl-${eventId}`))) return true;
+        return homeTeam && awayTeam && text.includes(homeTeam) && text.includes(awayTeam);
+      });
+
+      if (!target) {
+        const distance = Math.max(360, Math.floor(window.innerHeight * 0.62));
+        window.scrollBy(0, distance);
+        return false;
+      }
+
+      target.scrollIntoView({ block: "center", inline: "nearest" });
+      target.click();
+      return true;
+    }, { eventId, homeTeam, awayTeam, attempt }).catch(() => false);
+
+    if (clicked) {
+      await page.waitForTimeout(Math.max(1000, Number(process.env.SOFASCORE_BROWSER_PANEL_SETTLE_MS || 1800)));
+      return true;
+    }
+    await page.waitForTimeout(250);
   }
+
+  return false;
+}
+
+async function clickStatisticsTab(page) {
+  const clicked = await page.evaluate(() => {
+    const normalize = (value = "") =>
+      String(value)
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    const candidates = Array.from(document.querySelectorAll("button,a,div,span"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { element, rect, text: normalize(element.innerText || element.textContent || "") };
+      })
+      .filter(({ rect, text }) =>
+        rect.width >= 40 &&
+        rect.height >= 12 &&
+        rect.x >= Math.floor(window.innerWidth * 0.42) &&
+        /^estatisticas$/.test(text)
+      )
+      .sort((a, b) => b.rect.x - a.rect.x || a.rect.y - b.rect.y);
+
+    const target = candidates[0]?.element;
+    if (!target) return false;
+    target.click();
+    return true;
+  }).catch(() => false);
+
+  if (clicked) await page.waitForTimeout(Math.max(1200, Number(process.env.SOFASCORE_BROWSER_STATS_TAB_SETTLE_MS || 1800)));
+  return clicked;
 }
 
 async function fetchGameStatisticsVisually(page, game = {}) {
-  const url = statisticsUrlForGame(game);
-  if (!url) return emptyStats();
   try {
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: Math.max(8000, Number(process.env.SOFASCORE_BROWSER_DETAIL_TIMEOUT_MS || 16000)) });
-    await page.waitForTimeout(Math.max(1500, Number(process.env.SOFASCORE_BROWSER_DETAIL_SETTLE_MS || 3500)));
-    await page.getByText(/Estat/i).first().click({ timeout: 2000 }).catch(() => {});
-    await page.waitForTimeout(1200);
+    const opened = await clickEventInCurrentList(page, game);
+    if (!opened) return emptyStats({ sourceDetail: "visual_event_not_found" });
+
+    const tabClicked = await clickStatisticsTab(page);
+    if (!tabClicked) return emptyStats({ sourceDetail: "visual_statistics_tab_not_found" });
+
     const lines = await page.evaluate(() =>
       document.body.innerText
         .split("\n")
         .map((line) => String(line || "").replace(/\s+/g, " ").trim())
         .filter(Boolean)
-        .slice(0, 260)
+        .slice(0, 360)
     );
     return parseVisualStatisticsLines(lines);
   } catch {
-    return emptyStats();
+    return emptyStats({ sourceDetail: "visual_statistics_error" });
   }
 }
 

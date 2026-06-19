@@ -294,7 +294,11 @@ function startSofaScoreAutoMonitor(store, options = {}) {
         .map((game) => `${game.homeTeam || "?"} ${game.status || "-"} ${game.statusLabel || ""}`.trim())
         .join(" | ");
       const statsCount = (snapshot.games || []).filter((game) => game.stats && !game.stats.estimated && !game.stats.unavailable).length;
-      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}. Estatisticas: ${statsCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}`);
+      const sampleStats = (snapshot.games || [])
+        .slice(0, 5)
+        .map((game) => `${game.homeTeam || "?"}:${game.stats?.source || "sem_stats"}${game.stats?.sourceDetail ? `:${game.stats.sourceDetail}` : ""}`)
+        .join(" | ");
+      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}. Estatisticas: ${statsCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}${sampleStats ? ` Stats: ${sampleStats}` : ""}`);
     } catch (error) {
       console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
     } finally {
