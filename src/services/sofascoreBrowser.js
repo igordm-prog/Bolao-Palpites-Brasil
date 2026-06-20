@@ -1119,6 +1119,31 @@ async function collectStatisticsPanelLines(page) {
   });
 }
 
+async function pageHasSofaScoreError(page, response) {
+  if (response && response.status() >= 400) return true;
+  return page.evaluate(() => {
+    const title = String(document.title || "");
+    const body = String(document.body?.innerText || "");
+    return /\b(403|404)\b|forbidden|pagina nao encontrada|p[aá]gina n[aã]o encontrada|ocorreu um erro/i.test(`${title} ${body}`);
+  }).catch(() => true);
+}
+
+async function openGameFromLiveList(page, game, detailTimeoutMs) {
+  const response = await page.goto(DEFAULT_SOFASCORE_URL, {
+    waitUntil: "domcontentloaded",
+    timeout: detailTimeoutMs
+  });
+  if (await pageHasSofaScoreError(page, response)) return false;
+  await page.waitForTimeout(Math.max(1000, Number(process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS)));
+  await page.locator("text=Futebol").first().click({ timeout: 2500 }).catch(() => {});
+  await page.waitForTimeout(400);
+  await clickLiveFilter(page);
+  const opened = await clickEventInCurrentList(page, game);
+  if (!opened) return false;
+  await clickFullscreenView(page);
+  return true;
+}
+
 async function openGameStatisticsPage(page, game = {}) {
   const context = page.context();
   const detailPage = await context.newPage();
@@ -1143,27 +1168,31 @@ async function openGameStatisticsPage(page, game = {}) {
   });
 
   try {
+    let openedFromList = false;
     if (detailUrl) {
-      await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: detailTimeoutMs });
+      const response = await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: detailTimeoutMs });
       await detailPage.waitForTimeout(Math.max(1400, Number(process.env.SOFASCORE_BROWSER_PANEL_SETTLE_MS || 2200)));
-    } else {
-      await detailPage.goto(DEFAULT_SOFASCORE_URL, { waitUntil: "domcontentloaded", timeout: detailTimeoutMs });
-      await detailPage.waitForTimeout(Math.max(1000, Number(process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS)));
-      await clickLiveFilter(detailPage);
-      const opened = await clickEventInCurrentList(detailPage, game);
-      if (!opened) {
-        await detailPage.close().catch(() => {});
-        return { page: null, sourceDetail: "visual_event_not_found" };
+      if (await pageHasSofaScoreError(detailPage, response)) {
+        openedFromList = await openGameFromLiveList(detailPage, game, detailTimeoutMs);
       }
-      await clickFullscreenView(detailPage);
+    } else {
+      openedFromList = await openGameFromLiveList(detailPage, game, detailTimeoutMs);
+    }
+
+    if ((!detailUrl || await pageHasSofaScoreError(detailPage)) && !openedFromList) {
+      await detailPage.close().catch(() => {});
+      return { page: null, sourceDetail: "visual_event_not_found_after_direct_fallback" };
     }
 
     await clickFullscreenView(detailPage);
     const eventId = String(game.eventId || "").trim();
     const currentUrl = detailPage.url();
     if (eventId && !currentUrl.includes(eventId)) {
-      await detailPage.close().catch(() => {});
-      return { page: null, sourceDetail: "visual_event_id_not_confirmed" };
+      const recovered = await openGameFromLiveList(detailPage, game, detailTimeoutMs);
+      if (!recovered || !detailPage.url().includes(eventId)) {
+        await detailPage.close().catch(() => {});
+        return { page: null, sourceDetail: "visual_event_id_not_confirmed_after_fallback" };
+      }
     }
 
     const statsUrl = urlWithHashToken(currentUrl, "tab:statistics");
@@ -1174,10 +1203,17 @@ async function openGameStatisticsPage(page, game = {}) {
     await clickStatisticsTab(detailPage);
     await detailPage.waitForLoadState("networkidle", { timeout: 7000 }).catch(() => {});
     await detailPage.waitForTimeout(Math.max(700, Number(process.env.SOFASCORE_BROWSER_STATS_NETWORK_SETTLE_MS || 1200)));
-    return { page: detailPage, sourceDetail: "visual_fullscreen_statistics", statisticsPayloads };
-  } catch {
+    return {
+      page: detailPage,
+      sourceDetail: openedFromList ? "visual_list_fullscreen_statistics" : "visual_fullscreen_statistics",
+      statisticsPayloads
+    };
+  } catch (error) {
     await detailPage.close().catch(() => {});
-    return { page: null, sourceDetail: "visual_fullscreen_error" };
+    return {
+      page: null,
+      sourceDetail: `visual_fullscreen_error:${String(error?.name || "error").toLowerCase()}`
+    };
   }
 }
 
@@ -1641,6 +1677,7 @@ module.exports = {
   runSofaScoreBrowserProbe,
   runSofaScoreStatisticsProbe,
   __private: {
+    openGameStatisticsPage,
     parseSofaScoreStatistics,
     parseVisualStatisticsLines
   }
