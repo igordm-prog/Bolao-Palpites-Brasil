@@ -926,6 +926,32 @@ async function fetchGameStatisticsFromPage(page, eventId) {
   }
 }
 
+async function fetchManyGameStatisticsFromPage(page, eventIds = []) {
+  const uniqueIds = Array.from(new Set(eventIds.map((id) => String(id || "").trim()).filter(Boolean)));
+  if (!uniqueIds.length) return new Map();
+  try {
+    const payloads = await page.evaluate(async (ids) => {
+      const settled = await Promise.allSettled(ids.map(async (id) => {
+        const response = await fetch(`/api/v1/event/${id}/statistics`, {
+          credentials: "include",
+          headers: { "accept": "application/json,text/plain,*/*" }
+        });
+        if (!response.ok) return { id, ok: false, status: response.status };
+        return { id, ok: true, json: await response.json() };
+      }));
+      return settled.map((result, index) =>
+        result.status === "fulfilled" ? result.value : { id: ids[index], ok: false, error: String(result.reason?.message || result.reason || "erro") }
+      );
+    }, uniqueIds);
+    return new Map((payloads || []).map((item) => {
+      if (!item?.ok || !item.json) return [item?.id, emptyStats({ sourceDetail: `http_${item?.status || "error"}` })];
+      return [item.id, parseSofaScoreStatistics([{ path: `/api/v1/event/${item.id}/statistics`, json: item.json }])];
+    }));
+  } catch {
+    return new Map();
+  }
+}
+
 async function clickEventInCurrentList(page, game = {}) {
   const eventId = String(game.eventId || "").trim();
   const homeTeam = normalizeLine(game.homeTeam || "");
@@ -1204,8 +1230,12 @@ function chooseBestLiveStatus(game, details) {
 
 async function attachRealStatistics(page, games = []) {
   const maxStats = Math.max(1, Number(process.env.SOFASCORE_BROWSER_MAX_STATS_FETCH || 40));
-  const maxVisualStats = Math.max(0, Number(process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH || 25));
-  const delayMs = Math.max(0, Number(process.env.SOFASCORE_BROWSER_STATS_DELAY_MS || 250));
+  const maxVisualStats = Math.max(0, Number(process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH || 0));
+  const delayMs = Math.max(0, Number(process.env.SOFASCORE_BROWSER_STATS_DELAY_MS || 75));
+  const statsByEventId = await fetchManyGameStatisticsFromPage(
+    page,
+    games.slice(0, maxStats).map((game) => game.eventId)
+  );
   const enriched = [];
   let visualStatsCount = 0;
   for (const game of games) {
@@ -1213,9 +1243,10 @@ async function attachRealStatistics(page, games = []) {
       enriched.push({ ...game, stats: game.stats || emptyStats() });
       continue;
     }
-    const details = await fetchGameDetailsFromPage(page, game.eventId);
-    let stats = await fetchGameStatisticsFromPage(page, game.eventId);
+    let details = null;
+    let stats = statsByEventId.get(String(game.eventId || "")) || emptyStats();
     if (stats.unavailable && visualStatsCount < maxVisualStats) {
+      details = await fetchGameDetailsFromPage(page, game.eventId);
       const visualStats = await fetchGameStatisticsVisually(page, { ...game, ...(details || {}) });
       if (!visualStats.unavailable) stats = visualStats;
       if (visualStats.unavailable && visualStats.sourceDetail) stats = visualStats;

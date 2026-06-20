@@ -284,8 +284,13 @@ function startSofaScoreAutoMonitor(store, options = {}) {
   let running = false;
 
   async function run(reason) {
-    if (running) return;
+    if (running) {
+      console.log(`[SofaScore] Monitor automatico ignorou ${reason}: leitura anterior ainda em andamento.`);
+      return;
+    }
     running = true;
+    const started = Date.now();
+    console.log(`[SofaScore] Iniciando leitura automatica (${reason})...`);
     try {
       const { result, snapshot } = await updateSofaScoreCache(store, { source: `auto:${reason}` });
       const status = result.ok ? "ok" : `erro: ${result.error}`;
@@ -298,7 +303,7 @@ function startSofaScoreAutoMonitor(store, options = {}) {
         .slice(0, 5)
         .map((game) => `${game.homeTeam || "?"}:${game.stats?.source || "sem_stats"}${game.stats?.sourceDetail ? `:${game.stats.sourceDetail}` : ""}`)
         .join(" | ");
-      console.log(`[SofaScore] Cache automatico ${status}. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}. Estatisticas: ${statsCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}${sampleStats ? ` Stats: ${sampleStats}` : ""}`);
+      console.log(`[SofaScore] Cache automatico ${status} em ${Math.round((Date.now() - started) / 1000)}s. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}. Estatisticas: ${statsCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}${sampleStats ? ` Stats: ${sampleStats}` : ""}`);
     } catch (error) {
       console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
     } finally {
