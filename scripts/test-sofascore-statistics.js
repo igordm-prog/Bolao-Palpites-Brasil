@@ -70,6 +70,9 @@ const visual = parseVisualStatisticsLines([
   "62%",
   "Posse de bola",
   "38%",
+  "1.17",
+  "Gols esperados (xG)",
+  "0.42",
   "8",
   "Finalizacoes",
   "4",
@@ -86,5 +89,21 @@ assert.strictEqual(visual.totalShots, 12);
 assert.strictEqual(visual.shotsOnTarget, 5);
 assert.strictEqual(visual.corners, 7);
 assert.strictEqual(visual.possessionHome, 62);
+assert.strictEqual(visual.expectedGoals, 1.59);
+assert.strictEqual(visual.expectedGoalsHome, 1.17);
+assert.strictEqual(visual.expectedGoalsAway, 0.42);
+
+const visualOnlyXg = parseVisualStatisticsLines([
+  "38%",
+  "Posse de bola",
+  "62%",
+  "0.24",
+  "Gols esperados (xG)",
+  "0.83"
+]);
+
+assert.strictEqual(visualOnlyXg.unavailable, false);
+assert.strictEqual(visualOnlyXg.sourceDetail, "visual_statistics_tab:xg");
+assert.strictEqual(visualOnlyXg.expectedGoals, 1.07);
 
 console.log("Estatisticas SofaScore OK");

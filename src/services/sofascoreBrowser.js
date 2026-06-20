@@ -417,6 +417,31 @@ function numberNearLabel(lines, labelPatterns) {
   return 0;
 }
 
+function decimalPairNearLabel(lines, labelPatterns) {
+  const normalizedLines = lines.map((line) => normalizeLine(line));
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const key = normalizeKey(normalizedLines[index]);
+    if (!labelPatterns.some((pattern) => key.includes(pattern))) continue;
+    const pairs = [
+      [normalizedLines[index - 1], normalizedLines[index + 1]],
+      [normalizedLines[index - 2], normalizedLines[index + 2]]
+    ];
+    for (const pair of pairs) {
+      const values = pair
+        .map((value) => onlyNumber(String(value || "").replace("%", "")))
+        .filter((value) => value !== null && value >= 0);
+      if (values.length >= 2) {
+        return {
+          home: Math.round(values[0] * 100) / 100,
+          away: Math.round(values[1] * 100) / 100,
+          total: Math.round((values[0] + values[1]) * 100) / 100
+        };
+      }
+    }
+  }
+  return { home: 0, away: 0, total: 0 };
+}
+
 function sidePercentNearLabel(lines, labelPatterns) {
   const normalizedLines = lines.map((line) => normalizeLine(line));
   for (let index = 0; index < normalizedLines.length; index += 1) {
@@ -444,27 +469,53 @@ function parseVisualStatisticsLines(lines = []) {
   const yellowCards = numberNearLabel(lines, ["cartoes amarelos", "yellow cards"]);
   const redCards = numberNearLabel(lines, ["cartoes vermelhos", "red cards"]);
   const bigChances = numberNearLabel(lines, ["grandes chances", "big chances"]);
+  const expectedGoals = decimalPairNearLabel(lines, ["gols esperados", "expected goals", "xg"]);
   const possessionHome = sidePercentNearLabel(lines, ["posse de bola", "ball possession"]);
   const possessionAway = possessionHome ? 100 - possessionHome : 50;
-  const hasRealStats = totalShots || shotsOnTarget || shotsOffTarget || blockedShots || corners || dangerousAttacks || yellowCards || redCards || bigChances;
-  if (!hasRealStats) return emptyStats();
+  const hasRealStats = totalShots || shotsOnTarget || shotsOffTarget || blockedShots || corners || dangerousAttacks || yellowCards || redCards || bigChances || expectedGoals.total;
+  if (!hasRealStats) return emptyStats({ sourceDetail: "visual_statistics_empty" });
   const calculatedTotalShots = totalShots || shotsOnTarget + shotsOffTarget + blockedShots;
   return {
     totalShots: calculatedTotalShots,
+    homeTotalShots: 0,
+    awayTotalShots: 0,
     shotsOnTarget,
+    homeShotsOnTarget: 0,
+    awayShotsOnTarget: 0,
     shotsOffTarget,
     blockedShots,
     corners,
+    homeCorners: 0,
+    awayCorners: 0,
     dangerousAttacks: dangerousAttacks || Math.round(calculatedTotalShots * 2.2 + corners * 2),
+    attacks: 0,
     possessionHome,
     possessionAway,
     yellowCards,
     redCards,
+    goalkeeperSaves: 0,
+    fouls: 0,
+    offsides: 0,
     bigChances,
+    expectedGoals: expectedGoals.total,
+    expectedGoalsHome: expectedGoals.home,
+    expectedGoalsAway: expectedGoals.away,
+    statsItemsMapped: [
+      totalShots,
+      shotsOnTarget,
+      shotsOffTarget,
+      blockedShots,
+      corners,
+      dangerousAttacks,
+      yellowCards,
+      redCards,
+      bigChances,
+      expectedGoals.total
+    ].filter(Boolean).length,
     estimated: false,
     unavailable: false,
     source: "sofascore_visual_statistics",
-    sourceDetail: "visual_statistics_tab"
+    sourceDetail: expectedGoals.total && !totalShots ? "visual_statistics_tab:xg" : "visual_statistics_tab"
   };
 }
 
@@ -492,6 +543,28 @@ function compactGameKey(homeTeam, awayTeam, eventId) {
 
 function gameKey(game = {}, fallback = "") {
   return game.eventId || compactGameKey(game.homeTeam, game.awayTeam, game.time || game.status || fallback);
+}
+
+function statisticsUrlForGame(game = {}) {
+  const raw = String(game.href || "").trim();
+  if (!raw && !game.eventId) return null;
+  try {
+    const url = new URL(raw || DEFAULT_SOFASCORE_URL);
+    if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
+    const eventId = String(game.eventId || "").trim();
+    const cleanHash = String(url.hash || "").replace(/^#/, "");
+    if (cleanHash.includes("tab:statistics")) return url.toString();
+    if (cleanHash.includes("id:")) {
+      url.hash = `#${cleanHash.replace(/,?tab:[^,]+/g, "")},tab:statistics`;
+    } else if (eventId) {
+      url.hash = `#id:${eventId},tab:statistics`;
+    } else {
+      url.hash = "#tab:statistics";
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function enrichGames(games = [], sideCards = []) {
@@ -915,21 +988,59 @@ async function clickStatisticsTab(page) {
   return clicked;
 }
 
+async function collectStatisticsPanelLines(page) {
+  return page.evaluate(() => {
+    const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
+    const normalize = (value = "") =>
+      clean(value)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    const markers = [
+      "visao geral da partida",
+      "match overview",
+      "posse de bola",
+      "ball possession",
+      "gols esperados",
+      "expected goals",
+      "finalizacoes",
+      "total shots"
+    ];
+    const panels = Array.from(document.querySelectorAll("main,section,article,aside,div"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        const text = clean(element.innerText || element.textContent || "");
+        return { element, rect, text, key: normalize(text) };
+      })
+      .filter(({ rect, key }) =>
+        rect.width >= 260 &&
+        rect.height >= 160 &&
+        rect.x >= Math.floor(window.innerWidth * 0.35) &&
+        markers.some((marker) => key.includes(marker))
+      )
+      .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
+
+    const source = panels[0]?.text || document.body.innerText || "";
+    return source.split("\n").map(clean).filter(Boolean).slice(0, 520);
+  });
+}
+
 async function fetchGameStatisticsVisually(page, game = {}) {
   try {
-    const opened = await clickEventInCurrentList(page, game);
-    if (!opened) return emptyStats({ sourceDetail: "visual_event_not_found" });
+    const statsUrl = statisticsUrlForGame(game);
+    if (statsUrl) {
+      await page.goto(statsUrl, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) });
+      await page.waitForTimeout(Math.max(1600, Number(process.env.SOFASCORE_BROWSER_PANEL_SETTLE_MS || 2200)));
+    } else {
+      const opened = await clickEventInCurrentList(page, game);
+      if (!opened) return emptyStats({ sourceDetail: "visual_event_not_found" });
+    }
 
     const tabClicked = await clickStatisticsTab(page);
-    if (!tabClicked) return emptyStats({ sourceDetail: "visual_statistics_tab_not_found" });
+    if (!tabClicked && !/tab:statistics/i.test(page.url())) return emptyStats({ sourceDetail: "visual_statistics_tab_not_found" });
 
-    const lines = await page.evaluate(() =>
-      document.body.innerText
-        .split("\n")
-        .map((line) => String(line || "").replace(/\s+/g, " ").trim())
-        .filter(Boolean)
-        .slice(0, 360)
-    );
+    await page.waitForFunction(() => /Vis[aã]o geral da partida|Match overview|Posse de bola|Ball possession|Gols esperados|Expected goals|Finaliza[cç][oõ]es|Total shots/i.test(document.body.innerText || ""), null, { timeout: 5000 }).catch(() => {});
+    const lines = await collectStatisticsPanelLines(page);
     return parseVisualStatisticsLines(lines);
   } catch {
     return emptyStats({ sourceDetail: "visual_statistics_error" });
@@ -991,6 +1102,7 @@ async function attachRealStatistics(page, games = []) {
     if (stats.unavailable && visualStatsCount < maxVisualStats) {
       const visualStats = await fetchGameStatisticsVisually(page, { ...game, ...(details || {}) });
       if (!visualStats.unavailable) stats = visualStats;
+      if (visualStats.unavailable && visualStats.sourceDetail) stats = visualStats;
       visualStatsCount += 1;
     }
     const status = chooseBestLiveStatus(game, details);
