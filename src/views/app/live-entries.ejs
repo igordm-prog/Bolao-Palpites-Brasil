@@ -11,9 +11,9 @@
   <div class="content account-content">
     <header class="account-hero live-entries-hero">
       <div>
-        <p class="eyebrow">Over 1.5 gols</p>
+        <p class="eyebrow">Alertas manuais</p>
         <h1>Entradas ao vivo</h1>
-        <p>Monitoramento de jogos em andamento com cache SofaScore, funil estatistico, score de entrada e link de referencia.</p>
+        <p>Monitoramento de jogos em andamento com estatisticas reais do SofaScore e funis de analise manual.</p>
         <% if (liveEntries.isDemo) { %>
           <p class="muted">Configure a chave API_FOOTBALL_KEY para substituir a demonstracao por jogos ao vivo reais.</p>
         <% } %>
@@ -30,7 +30,6 @@
         </small>
         <div class="account-actions">
           <button class="button small" type="button" data-refresh-live>Atualizar</button>
-          <a class="button secondary small" href="<%= liveEntries.betanoUrl %>" target="_blank" rel="noreferrer">Betano</a>
         </div>
       </div>
     </header>
@@ -50,12 +49,12 @@
       <article>
         <span>Sinais encontrados</span>
         <strong data-stat-signals><%= liveEntries.stats.signals %></strong>
-        <small>score acima de 85</small>
+        <small>alertas aprovados no funil</small>
       </article>
       <article>
-        <span>Melhor score</span>
-        <strong data-stat-best-score><%= liveEntries.stats.bestScore %></strong>
-        <small>funil Over 1.5</small>
+        <span>Com estatisticas</span>
+        <strong data-stat-with-stats><%= liveEntries.stats.withStats || 0 %></strong>
+        <small>dados reais disponiveis</small>
       </article>
     </div>
 
@@ -72,7 +71,7 @@
           <article class="pool-item single live-empty-state">
             <div>
               <h3>Nenhuma entrada no funil agora</h3>
-              <p class="muted">Quando um jogo bater os filtros, ele aparecera aqui com odd, motivos e link Betano.</p>
+              <p class="muted">Quando um jogo bater os filtros obrigatorios, ele aparecera aqui para analise manual.</p>
             </div>
           </article>
         <% } %>
@@ -80,11 +79,11 @@
           <article class="live-signal-card">
             <div class="live-signal-head">
               <div>
-                <p class="live-entry-kicker">Entrada sugerida</p>
-                <h3><%= signal.recommendation?.market || "Over 1.5 gols" %></h3>
-                <p><%= signal.recommendation?.action || "Conferir a odd antes de entrar" %></p>
+                <p class="live-entry-kicker">Entrada encontrada</p>
+                <h3><%= signal.alert?.entrada || signal.recommendation?.market || "Alerta" %></h3>
+                <p>Analisar manualmente antes de qualquer decisao.</p>
               </div>
-              <span class="live-score-badge"><small>Score</small><strong><%= signal.funnelScore %></strong></span>
+              <span class="live-score-badge"><small>Tempo</small><strong><%= signal.alert?.tempo || `${signal.minute}'` %></strong></span>
             </div>
             <div class="live-match-line">
               <div>
@@ -96,22 +95,15 @@
                 <small><%= signal.minute %>'</small>
               </div>
             </div>
-            <div class="live-entry-advice">
-              <strong><%= signal.recommendation?.confidence || "Forte" %></strong>
-              <span><%= signal.recommendation?.detail || "Conferir o mercado Over 1.5 gols antes de entrar." %></span>
-            </div>
             <dl class="live-signal-metrics">
-              <div><dt>Odd funil</dt><dd><%= signal.liveOdd %></dd></div>
-              <div><dt>Finalizacoes</dt><dd><%= signal.stats.totalShots %></dd></div>
-              <div><dt>Escanteios</dt><dd><%= signal.stats.corners %></dd></div>
+              <div><dt>APPM</dt><dd><%= ((signal.stats.dangerousAttacks || 0) / Math.max(1, signal.minute || 1)).toFixed(2) %></dd></div>
+              <div><dt>CG</dt><dd><%= (signal.stats.totalShots || 0) + (signal.stats.shotsOnTarget || 0) + (signal.stats.corners || 0) %></dd></div>
+              <div><dt>xG</dt><dd><%= Number(signal.stats.expectedGoals || 0).toFixed(2) %></dd></div>
             </dl>
-            <% if (signal.odds1x2?.raw?.length) { %>
-              <p class="muted">1X2: Casa <%= signal.odds1x2.home || "-" %> | Empate <%= signal.odds1x2.draw || "-" %> | Fora <%= signal.odds1x2.away || "-" %></p>
-            <% } %>
             <ul class="live-reasons">
               <% signal.reasons.slice(0, 5).forEach((reason) => { %><li><%= reason %></li><% }) %>
             </ul>
-            <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer"><%= signal.source === "browser_sofascore" ? "Conferir no SofaScore" : "Conferir na Betano" %></a>
+            <a class="button full" href="<%= signal.link %>" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
           </article>
         <% }) %>
       </div>
@@ -126,29 +118,25 @@
             <th>Campeonato</th>
             <th>Status</th>
             <th>Placar</th>
-            <th>Odd</th>
-            <th>Odds 1X2</th>
-            <th>Score</th>
-            <th>Ritmo</th>
+            <th>Estatisticas</th>
+            <th>Decisao</th>
             <th></th>
           </tr>
         </thead>
         <tbody data-matches-body>
           <% if (!liveEntries.matches.length) { %>
-            <tr><td colspan="9">Nenhum jogo ao vivo encontrado agora.</td></tr>
+            <tr><td colspan="7">Nenhum jogo ao vivo encontrado agora.</td></tr>
           <% } %>
           <% liveEntries.matches.forEach((match) => { %>
-            <% const statsLine = match.statsEstimated ? "Sem estatisticas reais do SofaScore" : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.`; %>
+            <% const statsLine = match.statsEstimated ? "Sem estatisticas reais do SofaScore" : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc. | xG ${Number(match.stats.expectedGoals || 0).toFixed(2)}`; %>
             <tr>
               <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><br><small><%= match.sofaScoreStatus || `${match.minute}'` %></small></td>
               <td><%= match.league %></td>
-              <td><span class="badge <%= match.funnelScore >= 85 ? 'paid' : 'awaiting' %>"><%= match.status %></span></td>
+              <td><span class="badge <%= match.alert ? 'paid' : 'awaiting' %>"><%= match.status %></span></td>
               <td><%= match.scoreboard %></td>
-              <td><strong><%= match.liveOdd %></strong></td>
-              <td><small>1 <%= match.odds1x2?.home || "-" %> | X <%= match.odds1x2?.draw || "-" %> | 2 <%= match.odds1x2?.away || "-" %></small></td>
-              <td><span class="live-score-badge table-score"><%= match.funnelScore %></span><br><small><%= match.classification %></small></td>
-              <td><strong><%= match.pressure %></strong><br><small><%= statsLine %></small></td>
-              <td><a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer"><%= match.source === "browser_sofascore" ? "SofaScore" : "Betano" %></a></td>
+              <td><small><%= statsLine %></small></td>
+              <td><strong><%= match.alert?.entrada || match.classification %></strong><br><small><%= match.reasons.slice(0, 2).join(" | ") %></small></td>
+              <td><a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">SofaScore</a></td>
             </tr>
           <% }) %>
         </tbody>
@@ -170,7 +158,7 @@
     const lastUpdate = root.querySelector("[data-last-update]");
     const statMatches = root.querySelector("[data-stat-matches]");
     const statSignals = root.querySelector("[data-stat-signals]");
-    const statBestScore = root.querySelector("[data-stat-best-score]");
+    const statWithStats = root.querySelector("[data-stat-with-stats]");
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -185,7 +173,15 @@
     function statsLine(match) {
       return match.statsEstimated
         ? "Sem estatisticas reais do SofaScore"
-        : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc.`;
+        : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc. | xG ${Number(match.stats.expectedGoals || 0).toFixed(2)}`;
+    }
+
+    function appm(match) {
+      return ((match.stats?.dangerousAttacks || 0) / Math.max(1, match.minute || 1)).toFixed(2);
+    }
+
+    function cg(match) {
+      return (match.stats?.totalShots || 0) + (match.stats?.shotsOnTarget || 0) + (match.stats?.corners || 0);
     }
 
     function render(data) {
@@ -193,7 +189,7 @@
       lastUpdate.textContent = data.updatedAt ? `Atualizado em ${new Date(data.updatedAt).toLocaleString("pt-BR")}` : "Aguardando primeira leitura";
       statMatches.textContent = data.stats.matches;
       statSignals.textContent = data.stats.signals;
-      statBestScore.textContent = data.stats.bestScore;
+      statWithStats.textContent = data.stats.withStats || 0;
 
       if (data.error) {
         errorBox.hidden = false;
@@ -207,11 +203,11 @@
         <article class="live-signal-card">
           <div class="live-signal-head">
             <div>
-              <p class="live-entry-kicker">Entrada sugerida</p>
-              <h3>${escapeHtml(signal.recommendation?.market || "Over 1.5 gols")}</h3>
-              <p>${escapeHtml(signal.recommendation?.action || "Conferir a odd antes de entrar")}</p>
+              <p class="live-entry-kicker">Entrada encontrada</p>
+              <h3>${escapeHtml(signal.alert?.entrada || signal.recommendation?.market || "Alerta")}</h3>
+              <p>Analisar manualmente antes de qualquer decisao.</p>
             </div>
-            <span class="live-score-badge"><small>Score</small><strong>${signal.funnelScore}</strong></span>
+            <span class="live-score-badge"><small>Tempo</small><strong>${escapeHtml(signal.alert?.tempo || `${signal.minute}'`)}</strong></span>
           </div>
           <div class="live-match-line">
             <div>
@@ -223,24 +219,19 @@
               <small>${signal.minute}'</small>
             </div>
           </div>
-          <div class="live-entry-advice">
-            <strong>${escapeHtml(signal.recommendation?.confidence || "Forte")}</strong>
-            <span>${escapeHtml(signal.recommendation?.detail || "Conferir o mercado Over 1.5 gols antes de entrar.")}</span>
-          </div>
           <dl class="live-signal-metrics">
-            <div><dt>Odd funil</dt><dd>${escapeHtml(signal.liveOdd)}</dd></div>
-            <div><dt>Finalizacoes</dt><dd>${signal.stats.totalShots}</dd></div>
-            <div><dt>Escanteios</dt><dd>${signal.stats.corners}</dd></div>
+            <div><dt>APPM</dt><dd>${appm(signal)}</dd></div>
+            <div><dt>CG</dt><dd>${cg(signal)}</dd></div>
+            <div><dt>xG</dt><dd>${Number(signal.stats?.expectedGoals || 0).toFixed(2)}</dd></div>
           </dl>
-          ${signal.odds1x2 && signal.odds1x2.raw && signal.odds1x2.raw.length ? `<p class="muted">1X2: Casa ${escapeHtml(signal.odds1x2.home || "-")} | Empate ${escapeHtml(signal.odds1x2.draw || "-")} | Fora ${escapeHtml(signal.odds1x2.away || "-")}</p>` : ""}
           <ul class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-          <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">${signal.source === "browser_sofascore" ? "Conferir no SofaScore" : "Conferir na Betano"}</a>
+          <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
         </article>
       `).join("") : `
         <article class="pool-item single live-empty-state">
           <div>
             <h3>Nenhuma entrada no funil agora</h3>
-            <p class="muted">Quando um jogo bater os filtros, ele aparecera aqui com odd, motivos e link Betano.</p>
+            <p class="muted">Quando um jogo bater os filtros obrigatorios, ele aparecera aqui para analise manual.</p>
           </div>
         </article>
       `;
@@ -249,15 +240,13 @@
         <tr>
           <td><strong>${escapeHtml(match.homeTeam)} x ${escapeHtml(match.awayTeam)}</strong><br><small>${escapeHtml(match.sofaScoreStatus || `${match.minute}'`)}</small></td>
           <td>${escapeHtml(match.league)}</td>
-          <td><span class="badge ${match.funnelScore >= 85 ? "paid" : "awaiting"}">${escapeHtml(match.status)}</span></td>
+          <td><span class="badge ${match.alert ? "paid" : "awaiting"}">${escapeHtml(match.status)}</span></td>
           <td>${escapeHtml(match.scoreboard)}</td>
-          <td><strong>${escapeHtml(match.liveOdd)}</strong></td>
-          <td><small>1 ${escapeHtml(match.odds1x2?.home || "-")} | X ${escapeHtml(match.odds1x2?.draw || "-")} | 2 ${escapeHtml(match.odds1x2?.away || "-")}</small></td>
-          <td><span class="live-score-badge table-score">${match.funnelScore}</span><br><small>${escapeHtml(match.classification)}</small></td>
-          <td><strong>${escapeHtml(match.pressure)}</strong><br><small>${escapeHtml(statsLine(match))}</small></td>
-          <td><a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">${match.source === "browser_sofascore" ? "SofaScore" : "Betano"}</a></td>
+          <td><small>${escapeHtml(statsLine(match))}</small></td>
+          <td><strong>${escapeHtml(match.alert?.entrada || match.classification)}</strong><br><small>${escapeHtml(match.reasons.slice(0, 2).join(" | "))}</small></td>
+          <td><a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">SofaScore</a></td>
         </tr>
-      `).join("") : `<tr><td colspan="9">Nenhum jogo ao vivo encontrado agora.</td></tr>`;
+      `).join("") : `<tr><td colspan="7">Nenhum jogo ao vivo encontrado agora.</td></tr>`;
     }
 
     async function load(force = false) {

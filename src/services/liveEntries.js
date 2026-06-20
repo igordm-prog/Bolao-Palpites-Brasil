@@ -1,23 +1,12 @@
 const DEFAULT_API_BASE_URL = "https://v3.football.api-sports.io";
 const DEFAULT_SOFASCORE_BASE_URL = "https://www.sofascore.com/api/v1";
 const DEFAULT_SOFASCORE_PUBLIC_URL = "https://www.sofascore.com/pt/futebol/";
-const BETANO_TODAY_URL = "https://www.betano.bet.br/sport/futebol/jogos-de-hoje/";
 const DEFAULT_CACHE_MS = 30000;
 const DEFAULT_MAX_FIXTURES = 8;
 const DEFAULT_API_TIMEOUT_MS = 8000;
 const IGNORED_COMPETITIONS = new Set(["club friendly games mundo", "club friendly games world"]);
-
-const leagueLinks = new Map([
-  ["brasileirao serie a", "https://www.betano.bet.br/sport/futebol/brasil/brasileirao-serie-a-betano/10016/"],
-  ["brasileirão série a", "https://www.betano.bet.br/sport/futebol/brasil/brasileirao-serie-a-betano/10016/"],
-  ["copa do brasil", "https://www.betano.bet.br/sport/futebol/brasil/copa-betano-do-brasil/10008/"],
-  ["la liga", "https://www.betano.bet.br/sport/futebol/espanha/laliga/5/"],
-  ["laliga", "https://www.betano.bet.br/sport/futebol/espanha/laliga/5/"],
-  ["premier league", "https://www.betano.bet.br/sport/futebol/competicoes/inglaterra/1/"],
-  ["liga dos campeoes", "https://www.betano.bet.br/sport/futebol/competicoes/liga-dos-campeoes/188566/"],
-  ["liga dos campeões", "https://www.betano.bet.br/sport/futebol/competicoes/liga-dos-campeoes/188566/"],
-  ["copa libertadores", "https://www.betano.bet.br/sport/futebol/competicoes/copa-libertadores/189817/"]
-]);
+const ALERT_COOLDOWN_MS = 5 * 60 * 1000;
+const alertCooldowns = new Map();
 
 const demoGames = [
   ["Flamengo", "Bahia", "Brasileirao Serie A"],
@@ -35,14 +24,6 @@ const cache = {
   signals: [],
   error: null
 };
-
-function betanoEntryLink(league = "", homeTeam = "", awayTeam = "") {
-  if (process.env.BETANO_ENTRY_URL) return process.env.BETANO_ENTRY_URL;
-  const leagueKey = normalizeText(league);
-  if (leagueLinks.has(leagueKey)) return leagueLinks.get(leagueKey);
-  const query = encodeURIComponent([homeTeam, awayTeam].filter(Boolean).join(" "));
-  return query ? `${BETANO_TODAY_URL}?q=${query}` : BETANO_TODAY_URL;
-}
 
 async function getLiveEntriesDashboard(options = {}) {
   const maxAgeMs = Number(options.maxAgeMs || process.env.LIVE_ENTRIES_CACHE_MS || DEFAULT_CACHE_MS);
@@ -118,7 +99,6 @@ async function buildSofaScoreMatch(baseUrl, event) {
     minute,
     homeScore,
     awayScore,
-    liveOdd: estimateOver15Odd(minute, homeScore + awayScore),
     stats,
     startsAt: event.startTimestamp ? new Date(Number(event.startTimestamp) * 1000).toISOString() : new Date().toISOString(),
     source: "sofascore"
@@ -137,17 +117,36 @@ async function fetchSofaScoreStatistics(baseUrl, eventId) {
           const home = numberValue(item.home);
           const away = numberValue(item.away);
           const total = home + away;
-          if (name.includes("total shots") || name.includes("shots")) stats.totalShots += total;
-          if (name.includes("shots on target")) stats.shotsOnTarget += total;
-          if (name.includes("corner")) stats.corners += total;
+          if (name.includes("expected goals") || name.includes("gols esperados") || name === "xg") {
+            stats.expectedGoalsHome += decimalValue(item.home);
+            stats.expectedGoalsAway += decimalValue(item.away);
+            stats.expectedGoals += decimalValue(item.home) + decimalValue(item.away);
+          }
+          if (name.includes("total shots") || name.includes("shots")) {
+            stats.homeTotalShots += home;
+            stats.awayTotalShots += away;
+            stats.totalShots += total;
+          }
+          if (name.includes("shots on target")) {
+            stats.homeShotsOnTarget += home;
+            stats.awayShotsOnTarget += away;
+            stats.shotsOnTarget += total;
+          }
+          if (name.includes("corner")) {
+            stats.homeCorners += home;
+            stats.awayCorners += away;
+            stats.corners += total;
+          }
           if (name.includes("yellow")) stats.yellowCards += total;
           if (name.includes("red")) stats.redCards += total;
           if (name.includes("dangerous attacks")) stats.dangerousAttacks += total;
-          if (name.includes("ball possession")) stats.possessionHome = home || stats.possessionHome;
+          if (name.includes("ball possession")) {
+            stats.possessionHome = home || stats.possessionHome;
+            stats.possessionAway = away || stats.possessionAway;
+          }
         });
       });
     });
-    if (!stats.dangerousAttacks) stats.dangerousAttacks = Math.round(stats.totalShots * 2.2 + stats.corners * 2);
     return stats;
   } catch {
     return emptyStats();
@@ -191,12 +190,7 @@ async function buildApiFootballMatch(baseUrl, apiKey, item) {
   const minute = Number(status.elapsed || 0);
   const homeScore = Number(goals.home || 0);
   const awayScore = Number(goals.away || 0);
-  const [stats, liveOdd] = fixtureId
-    ? await Promise.all([
-        fetchFixtureStatistics(baseUrl, fixtureId, apiKey),
-        fetchLiveOver15Odd(baseUrl, fixtureId, apiKey)
-      ])
-    : [emptyStats(), null];
+  const stats = fixtureId ? await fetchFixtureStatistics(baseUrl, fixtureId, apiKey) : emptyStats();
 
   return buildMatch({
     id: `api-${fixtureId || `${homeTeam}-${awayTeam}`}`,
@@ -206,7 +200,6 @@ async function buildApiFootballMatch(baseUrl, apiKey, item) {
     minute,
     homeScore,
     awayScore,
-    liveOdd: liveOdd || estimateOver15Odd(minute, homeScore + awayScore),
     stats,
     startsAt: item.fixture?.date || new Date().toISOString(),
     source: "api_football"
@@ -231,34 +224,10 @@ async function fetchFixtureStatistics(baseUrl, fixtureId, apiKey) {
         if (type === "ball possession" && teamIndex === 0) stats.possessionHome = value;
       });
     });
-    if (!stats.dangerousAttacks) stats.dangerousAttacks = Math.round(stats.totalShots * 2.2 + stats.corners * 2);
     return stats;
   } catch {
     return emptyStats();
   }
-}
-
-async function fetchLiveOver15Odd(baseUrl, fixtureId, apiKey) {
-  try {
-    const payload = await apiGet(baseUrl, "/odds/live", { fixture: fixtureId }, apiKey);
-    for (const item of payload.response || []) {
-      for (const bet of item.odds || []) {
-        const name = normalizeText(bet.name);
-        if (!name.includes("over") && !name.includes("goals")) continue;
-        for (const value of bet.values || []) {
-          const label = normalizeText(value.value);
-          const handicap = String(value.handicap || "");
-          if ((label.includes("over") && label.includes("1.5")) || handicap === "1.5") {
-            const odd = Number(value.odd);
-            if (Number.isFinite(odd) && odd > 1) return odd;
-          }
-        }
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 async function apiGet(baseUrl, path, params, apiKey) {
@@ -296,7 +265,6 @@ function buildDemoMatches() {
       minute,
       homeScore,
       awayScore,
-      liveOdd: estimateOver15Odd(minute, homeScore + awayScore),
       stats,
       startsAt: new Date(now.getTime() + (index - 2) * 12 * 60000).toISOString(),
       source: "simulator"
@@ -306,125 +274,244 @@ function buildDemoMatches() {
 
 function buildMatch(input) {
   const stats = { ...emptyStats(), ...input.stats };
-  const statsUnavailable = Boolean(stats.estimated || stats.unavailable);
-  const pressure = statsUnavailable ? "sem estatisticas reais" : pressureLabel(stats.possessionHome);
-  const score = liveFunnelScore({
+  const dados = normalizarEstatisticas({
+    id: input.id,
+    league: input.league,
+    homeTeam: input.homeTeam,
+    awayTeam: input.awayTeam,
     minute: input.minute,
     homeScore: input.homeScore,
     awayScore: input.awayScore,
-    liveOdd: input.liveOdd,
-    ...stats,
-    pressure,
-    statsUnavailable
+    stats,
+    startsAt: input.startsAt,
+    source: input.source
   });
-  const recommendation = buildEntryRecommendation(input, score);
+  const evaluations = [
+    avaliarGolLimite1T(dados),
+    avaliarGolLimite2T(dados),
+    avaliarCantoLimite(dados)
+  ].filter((result) => result.approved);
+  const alert = evaluations[0] ? montarMensagemAlertaSemOdd(dados, evaluations[0]) : null;
   return {
     id: input.id,
     league: input.league,
     homeTeam: input.homeTeam,
     awayTeam: input.awayTeam,
     startsAt: input.startsAt,
-    status: score.score >= 85 ? "Entrada encontrada" : score.score >= 60 ? "Em observacao" : "Ao vivo",
+    status: alert ? "Entrada encontrada" : "Ao vivo",
     minute: input.minute,
     scoreboard: `${input.homeScore} x ${input.awayScore}`,
-    liveOdd: Number(input.liveOdd || 0).toFixed(2),
-    funnelScore: score.score,
-    classification: score.classification,
-    recommendation,
-    reasons: score.reasons,
+    funnelScore: alert ? 100 : 0,
+    classification: alert ? "entrada encontrada" : dados.decisionLog,
+    recommendation: alert ? { market: alert.entrada, action: "Analisar manualmente", detail: alert.motivos.join(" "), confidence: "Alerta" } : null,
+    reasons: alert ? alert.motivos : dados.missingReasons,
+    alert,
+    alerts: evaluations.map((result) => montarMensagemAlertaSemOdd(dados, result)),
     stats,
-    pressure,
-    link: betanoEntryLink(input.league, input.homeTeam, input.awayTeam),
+    statsEstimated: Boolean(stats.estimated || stats.unavailable),
+    pressure: dados.pressure,
+    link: input.link || DEFAULT_SOFASCORE_PUBLIC_URL,
     source: input.source
   };
 }
 
-function buildEntryRecommendation(input, score) {
-  const goals = Number(input.homeScore || 0) + Number(input.awayScore || 0);
-  const goalsNeeded = Math.max(0, 2 - goals);
-  const confidence = score.score >= 95 ? "Muito forte" : score.score >= 85 ? "Forte" : score.score >= 75 ? "Acompanhar" : "Baixa";
-  const detail = goalsNeeded === 2
-    ? "Precisa sair 2 gols na partida para bater a linha."
-    : goalsNeeded === 1
-      ? "Precisa sair mais 1 gol na partida para bater a linha."
-      : "Linha ja batida. Nao abrir nova entrada pelo funil Over 1.5.";
+function normalizarEstatisticas(jogo = {}) {
+  const stats = { ...emptyStats(), ...(jogo.stats || {}) };
+  const minute = Number(jogo.minute || 0);
+  const period = minute > 45 ? 2 : 1;
+  const appm = calcularAPPM(stats.dangerousAttacks, minute);
+  const cg = calcularCG(stats.totalShots, stats.shotsOnTarget, stats.corners);
+  const possessionHome = Number(stats.possessionHome || 50);
+  const possessionAway = Number(stats.possessionAway || (possessionHome ? 100 - possessionHome : 50));
+  const dominantPossession = Math.max(possessionHome, possessionAway);
+  const xg = Number(stats.expectedGoals || 0);
+  const missingReasons = [];
+  if (!minute || minute > 120) missingReasons.push("tempo de jogo sem confiabilidade");
+  if (stats.estimated || stats.unavailable) missingReasons.push("estatisticas reais indisponiveis");
+  if (!stats.dangerousAttacks) missingReasons.push("ataques perigosos ausentes");
+  if (!stats.totalShots && !stats.corners) missingReasons.push("chances de gol ausentes");
+  if (!xg) missingReasons.push("xG ausente");
+  const favoriteSide = inferFavoriteSide(stats);
   return {
-    market: "Over 1.5 gols",
-    action: "Conferir a odd do Over 1.5 gols antes de entrar",
-    detail,
-    goalsNeeded,
-    confidence
+    id: jogo.id,
+    gameId: jogo.id,
+    league: jogo.league,
+    homeTeam: jogo.homeTeam,
+    awayTeam: jogo.awayTeam,
+    minute,
+    period,
+    periodLabel: period === 1 ? "1oT" : "2oT",
+    homeScore: Number(jogo.homeScore || 0),
+    awayScore: Number(jogo.awayScore || 0),
+    stats,
+    appm,
+    cg,
+    possessionHome,
+    possessionAway,
+    dominantPossession,
+    xg,
+    corners: Number(stats.corners || 0),
+    favoriteSide,
+    favoriteIsDrawingOrLosing: favoriteSide === "home"
+      ? Number(jogo.homeScore || 0) <= Number(jogo.awayScore || 0)
+      : Number(jogo.awayScore || 0) <= Number(jogo.homeScore || 0),
+    pressure: dominantPossession >= 60 ? "Favorito pressionando no campo de ataque" : "Monitorando ritmo",
+    missingReasons,
+    decisionLog: missingReasons.length ? missingReasons.join("; ") : "monitorando"
   };
 }
 
-function liveFunnelScore(match) {
-  let score = 0;
-  const reasons = [];
-  if (match.statsUnavailable) {
-    reasons.push("estatisticas reais indisponiveis");
-  }
-  if (match.minute >= 15 && match.minute <= 35) {
-    score += 10;
-    reasons.push("minuto ideal");
-  }
-  if (match.liveOdd >= 1.7 && match.liveOdd <= 2.2) {
-    score += 15;
-    reasons.push("odd dentro do filtro");
-  }
-  if (match.totalShots >= 6) {
-    score += 15;
-    reasons.push(`${match.totalShots} finalizacoes`);
-  }
-  if (match.shotsOnTarget >= 2) {
-    score += 20;
-    reasons.push(`${match.shotsOnTarget} no alvo`);
-  }
-  if (match.corners >= 3) {
-    score += 10;
-    reasons.push(`${match.corners} escanteios`);
-  }
-  if (["favorito pressionando", "mandante pressionando", "visitante pressionando"].includes(match.pressure)) {
-    score += 15;
-    reasons.push(match.pressure);
-  }
-  if (match.dangerousAttacks >= 18) {
-    score += 15;
-    reasons.push("ataques perigosos");
-  }
-  if (match.redCards === 0) {
-    score += 10;
-    reasons.push("sem vermelho");
-  }
+function calcularAPPM(ataquesPerigosos, minutoAtual) {
+  const minute = Number(minutoAtual || 0);
+  if (!minute) return 0;
+  return Math.round((Number(ataquesPerigosos || 0) / minute) * 100) / 100;
+}
 
-  if (match.homeScore + match.awayScore > 1) {
-    reasons.push("placar fora da janela");
-  }
+function calcularCG(finalizacoes, chutesAoAlvo, escanteios) {
+  const shots = Number(finalizacoes || 0);
+  const target = Number(chutesAoAlvo || 0);
+  const corners = Number(escanteios || 0);
+  return target > 0 ? shots + target + corners : shots + corners;
+}
 
-  if (match.statsUnavailable) {
-    score = Math.min(score, 45);
-  }
+function avaliarGolLimite1T(dados, config = {}) {
+  const cfg = { appm: 1, cg: 10, possession: 60, xg: 1, corners: 3, ...config };
+  return evaluateRequiredFunnel(dados, "Gol Limite 1o Tempo", [
+    [dados.period === 1, "periodo precisa ser 1o tempo"],
+    [dados.appm >= cfg.appm, "APPM abaixo de 1.00"],
+    [dados.cg >= cfg.cg, "chances de gol abaixo de 10"],
+    [dados.dominantPossession >= cfg.possession, "posse de bola abaixo de 60%"],
+    [dados.xg >= cfg.xg, "xG abaixo de 1.00"],
+    [dados.corners >= cfg.corners, "tendencia de escanteios abaixo de 3"]
+  ]);
+}
 
-  const classification = score >= 85 ? "entrada encontrada" : score >= 75 ? "possivel entrada" : score >= 60 ? "observar" : "sem entrada";
-  return { score, classification, reasons };
+function avaliarGolLimite2T(dados, config = {}) {
+  const cfg = { appm: 1, cg: 15, possession: 60, xg: 1, corners: 7, ...config };
+  return evaluateRequiredFunnel(dados, "Gol Limite 2o Tempo", [
+    [dados.period === 2, "periodo precisa ser 2o tempo"],
+    [dados.appm >= cfg.appm, "APPM abaixo de 1.00"],
+    [dados.cg >= cfg.cg, "chances de gol abaixo de 15"],
+    [dados.dominantPossession >= cfg.possession, "posse de bola abaixo de 60%"],
+    [dados.xg >= cfg.xg, "xG abaixo de 1.00"],
+    [dados.corners >= cfg.corners, "tendencia de escanteios abaixo de 7"]
+  ]);
+}
+
+function avaliarCantoLimite(dados, config = {}) {
+  const cfg = { appm: 1, cg1: 10, cg2: 15, possession: 56, xg: 1, ...config };
+  const cgOk = dados.period === 1 ? dados.cg > cfg.cg1 : dados.cg > cfg.cg2;
+  return evaluateRequiredFunnel(dados, "Canto Limite", [
+    [validarJanelaCantoLimite(dados.period, dados.minute), "fora da janela de entrada do Canto Limite"],
+    [dados.appm >= cfg.appm, "APPM abaixo de 1.00"],
+    [cgOk, "chances de gol abaixo do minimo por periodo"],
+    [dados.xg > cfg.xg, "xG abaixo ou igual a 1.00"],
+    [dados.dominantPossession > cfg.possession, "posse de bola abaixo ou igual a 56%"],
+    [dados.favoriteIsDrawingOrLosing, "favorito nao esta empatando ou perdendo"]
+  ]);
+}
+
+function validarJanelaCantoLimite(periodo, minuto) {
+  const minute = Number(minuto || 0);
+  if (Number(periodo) === 1) return minute >= 37 && minute <= 42;
+  if (Number(periodo) === 2) return minute >= 85 && minute <= 88;
+  return false;
+}
+
+function evaluateRequiredFunnel(dados, entrada, rules) {
+  if (dados.missingReasons.length) return { approved: false, entrada, rejected: dados.missingReasons };
+  const rejected = rules.filter(([approved]) => !approved).map(([, reason]) => reason);
+  return {
+    approved: rejected.length === 0,
+    entrada,
+    rejected,
+    motivos: rejected.length ? [] : montarMotivos(dados, entrada)
+  };
+}
+
+function montarMotivos(dados) {
+  return [
+    `APPM: ${dados.appm.toFixed(2)}, acima do minimo de 1.00.`,
+    `Chances de gol: ${dados.cg}, acima do minimo exigido.`,
+    `Posse de bola: ${dados.dominantPossession}%, acima do filtro.`,
+    `xG: ${dados.xg.toFixed(2)}, acima do minimo exigido.`,
+    `Tendencia de escanteios dentro do filtro (${dados.corners}).`,
+    dados.pressure
+  ];
+}
+
+function montarMensagemAlertaSemOdd(dados, resultado) {
+  const chave = `${dados.gameId}:${dados.period}:${resultado.entrada}`;
+  return {
+    title: "Entrada encontrada",
+    entrada: resultado.entrada,
+    gameId: dados.gameId,
+    key: chave,
+    jogo: `${dados.homeTeam} x ${dados.awayTeam}`,
+    campeonato: dados.league,
+    tempo: `${dados.minute}' ${dados.periodLabel}`,
+    motivos: resultado.motivos || montarMotivos(dados),
+    text: [
+      "Entrada encontrada",
+      "",
+      `Entrada: ${resultado.entrada}`,
+      `Jogo: ${dados.homeTeam} x ${dados.awayTeam}`,
+      `Campeonato: ${dados.league}`,
+      `Tempo: ${dados.minute}' ${dados.periodLabel}`,
+      "",
+      "Motivo:",
+      ...(resultado.motivos || montarMotivos(dados)).map((motivo) => `- ${motivo}`)
+    ].join("\n")
+  };
+}
+
+function verificarCooldown(chaveAlerta, now = Date.now()) {
+  const last = alertCooldowns.get(chaveAlerta) || 0;
+  if (now - last < ALERT_COOLDOWN_MS) return false;
+  alertCooldowns.set(chaveAlerta, now);
+  return true;
+}
+
+function enviarAlertaWhatsAppOuTelegram(alerta) {
+  return { sent: false, alerta };
+}
+
+function registrarLogDeDecisao(dados, resultado) {
+  return { gameId: dados.gameId, entrada: resultado.entrada, approved: resultado.approved, rejected: resultado.rejected || [] };
+}
+
+function inferFavoriteSide(stats = {}) {
+  const homePressure =
+    Number(stats.possessionHome || 0) +
+    Number(stats.expectedGoalsHome || 0) * 20 +
+    Number(stats.homeTotalShots || 0) +
+    Number(stats.homeShotsOnTarget || 0) * 2 +
+    Number(stats.homeCorners || 0);
+  const awayPressure =
+    Number(stats.possessionAway || 0) +
+    Number(stats.expectedGoalsAway || 0) * 20 +
+    Number(stats.awayTotalShots || 0) +
+    Number(stats.awayShotsOnTarget || 0) * 2 +
+    Number(stats.awayCorners || 0);
+  return homePressure >= awayPressure ? "home" : "away";
 }
 
 function setCache(provider, matches, error) {
   cache.updatedAt = new Date().toISOString();
   cache.provider = provider;
   cache.matches = matches;
-  cache.signals = matches.filter((match) => match.funnelScore >= 85 && !match.reasons.includes("placar fora da janela"));
+  cache.signals = matches.filter((match) => match.alert);
   cache.error = error;
 }
 
 function snapshot() {
-  const matches = cache.matches.slice().sort((a, b) => b.funnelScore - a.funnelScore);
-  const signals = cache.signals.slice().sort((a, b) => b.funnelScore - a.funnelScore);
+  const matches = cache.matches.slice().sort((a, b) => Number(b.alert ? 1 : 0) - Number(a.alert ? 1 : 0));
+  const signals = cache.signals.slice();
   return {
     updatedAt: cache.updatedAt,
     provider: cache.provider,
     providerLabel: cache.provider === "api_football" ? "API-Football" : cache.provider === "sofascore" ? "SofaScore" : "Demonstracao",
     isDemo: cache.provider === "simulator",
-    betanoUrl: BETANO_TODAY_URL,
     error: cache.error,
     matches,
     signals,
@@ -432,7 +519,7 @@ function snapshot() {
       matches: matches.length,
       live: matches.filter((match) => match.status !== "Finalizado").length,
       signals: signals.length,
-      bestScore: matches.reduce((highest, match) => Math.max(highest, match.funnelScore), 0)
+      withStats: matches.filter((match) => !match.statsEstimated).length
     }
   };
 }
@@ -451,37 +538,32 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
       minute,
       homeScore,
       awayScore,
-      liveOdd: game.liveOdd || estimateOver15Odd(minute, homeScore + awayScore),
       stats: game.stats || emptyStats(),
       startsAt: snapshot.finishedAt || game.capturedAt || new Date().toISOString(),
-      source: "browser_sofascore"
+      source: "browser_sofascore",
+      link: sofaScorePublicLink(game.href, game)
     });
     match.status = sofaScoreDisplayStatus(game) || match.status;
     match.sofaScoreStatus = game.status || null;
     match.scoreboard = game.score || match.scoreboard;
-    match.odds1x2 = game.odds1x2 || null;
     match.eventId = game.eventId || null;
-    match.link = sofaScorePublicLink(game.href, game);
     match.statsEstimated = Boolean(match.stats?.estimated || match.stats?.unavailable || game.stats?.estimated || game.stats?.unavailable);
     return match;
   });
-  const signals = matches
-    .filter((match) => match.funnelScore >= 85 && !match.reasons.includes("placar fora da janela"))
-    .sort((a, b) => b.funnelScore - a.funnelScore);
+  const signals = matches.filter((match) => match.alert);
   return {
     updatedAt: snapshot.finishedAt || snapshot.createdAt,
     provider: "browser_sofascore",
     providerLabel: "SofaScore Browser",
     isDemo: false,
-    betanoUrl: BETANO_TODAY_URL,
     error: snapshot.ok ? null : snapshot.error,
-    matches: matches.slice().sort((a, b) => b.funnelScore - a.funnelScore),
+    matches: matches.slice().sort((a, b) => Number(b.alert ? 1 : 0) - Number(a.alert ? 1 : 0)),
     signals,
     stats: {
       matches: matches.length,
       live: matches.filter((match) => ["Ao vivo", "Intervalo"].includes(match.status)).length,
       signals: signals.length,
-      bestScore: matches.reduce((highest, match) => Math.max(highest, match.funnelScore), 0)
+      withStats: matches.filter((match) => !match.statsEstimated).length
     }
   };
 }
@@ -546,10 +628,20 @@ function sofaScorePublicLink(href, game = {}) {
 function emptyStats(extra = {}) {
   return {
     totalShots: 0,
+    homeTotalShots: 0,
+    awayTotalShots: 0,
     shotsOnTarget: 0,
+    homeShotsOnTarget: 0,
+    awayShotsOnTarget: 0,
     corners: 0,
+    homeCorners: 0,
+    awayCorners: 0,
     dangerousAttacks: 0,
     possessionHome: 50,
+    possessionAway: 50,
+    expectedGoals: 0,
+    expectedGoalsHome: 0,
+    expectedGoalsAway: 0,
     yellowCards: 0,
     redCards: 0,
     estimated: true,
@@ -564,15 +656,16 @@ function pressureLabel(possessionHome) {
   return "ritmo ofensivo";
 }
 
-function estimateOver15Odd(minute, goals) {
-  const odd = 2.35 - minute * 0.018 - goals * 0.42;
-  return Math.max(1.2, Math.min(2.75, odd));
-}
-
 function numberValue(value) {
   if (value === null || value === undefined) return 0;
   const parsed = Number(String(value).replace("%", "").trim());
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+}
+
+function decimalValue(value) {
+  if (value === null || value === undefined) return 0;
+  const parsed = Number(String(value).replace("%", "").replace(",", ".").trim());
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
 }
 
 function normalizeText(value = "") {
@@ -584,9 +677,21 @@ function normalizeText(value = "") {
 }
 
 module.exports = {
-  betanoEntryLink,
   dashboardFromSofaScoreSnapshot,
   getLiveEntriesDashboard,
   isSofaScoreLiveGame,
-  refreshLiveEntries
+  refreshLiveEntries,
+  __private: {
+    normalizarEstatisticas,
+    calcularAPPM,
+    calcularCG,
+    avaliarGolLimite1T,
+    avaliarGolLimite2T,
+    avaliarCantoLimite,
+    validarJanelaCantoLimite,
+    montarMotivos,
+    montarMensagemAlertaSemOdd,
+    verificarCooldown,
+    registrarLogDeDecisao
+  }
 };

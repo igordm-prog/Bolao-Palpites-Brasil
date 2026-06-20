@@ -218,8 +218,6 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     homeScore: game.homeScore,
     awayScore: game.awayScore,
     score: game.score || null,
-    odds1x2: game.odds1x2 || null,
-    liveOdd: game.liveOdd || null,
     href: game.href || null,
     stats: game.stats || null,
     rawText: game.rawText || null,

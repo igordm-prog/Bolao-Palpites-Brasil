@@ -5,6 +5,9 @@ const DEFAULT_CAPTURE_DELAY_MS = 1000;
 const DEFAULT_MAX_CAPTURE_STEPS = 80;
 const DEFAULT_MAX_EMPTY_CAPTURE_STEPS = 8;
 const IGNORED_COMPETITIONS = new Set(["club friendly games mundo", "club friendly games world"]);
+const DEFAULT_STATS_MEMORY_MS = 10 * 60 * 1000;
+const statsMemory = new Map();
+let visualStatsCursor = 0;
 
 function normalizeLine(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
@@ -371,9 +374,6 @@ function parseSofaScoreStatisticsCandidate(candidate = {}) {
         }
   });
 
-  if (!stats.dangerousAttacks && (stats.totalShots || stats.corners)) {
-    stats.dangerousAttacks = Math.round(stats.totalShots * 2.2 + stats.corners * 2);
-  }
   if (!stats.totalShots && (stats.shotsOnTarget || stats.shotsOffTarget || stats.blockedShots)) {
     stats.totalShots = stats.shotsOnTarget + stats.shotsOffTarget + stats.blockedShots;
   }
@@ -504,7 +504,7 @@ function parseVisualStatisticsLines(lines = []) {
     corners,
     homeCorners: 0,
     awayCorners: 0,
-    dangerousAttacks: dangerousAttacks || Math.round(calculatedTotalShots * 2.2 + corners * 2),
+    dangerousAttacks,
     attacks: 0,
     possessionHome,
     possessionAway,
@@ -533,19 +533,6 @@ function parseVisualStatisticsLines(lines = []) {
     unavailable: false,
     source: "sofascore_visual_statistics",
     sourceDetail: expectedGoals.total && !totalShots ? "visual_statistics_tab:xg" : "visual_statistics_tab"
-  };
-}
-
-function inferOddsFromText(text = "") {
-  const odds = String(text)
-    .match(/\b\d{1,2}[.,]\d{2}\b/g)
-    ?.map((item) => Number(item.replace(",", ".")))
-    .filter((item) => Number.isFinite(item) && item >= 1) || [];
-  return {
-    home: odds[0] || null,
-    draw: odds[1] || null,
-    away: odds[2] || null,
-    raw: odds.slice(0, 6)
   };
 }
 
@@ -578,11 +565,7 @@ function detailUrlForGame(game = {}) {
   }
 }
 
-function enrichGames(games = [], sideCards = []) {
-  const sideOdds = sideCards.map((card) => ({
-    text: card.text,
-    odds: inferOddsFromText(card.text)
-  }));
+function enrichGames(games = []) {
   return games
     .map((game, index) => {
       const status = normalizeCapturedStatus(game.status || "-", game.statusSource || game.source);
@@ -590,11 +573,6 @@ function enrichGames(games = [], sideCards = []) {
       const minute = minuteFromStatus(status);
       const homeScore = onlyNumber(game.homeScore ?? String(game.score || "").split("x")[0]);
       const awayScore = onlyNumber(game.awayScore ?? String(game.score || "").split("x")[1]);
-      const odds = inferOddsFromText(game.rawText || "");
-      const relatedSideOdds = sideOdds.find((item) => {
-        const text = item.text.toLowerCase();
-        return text.includes(String(game.homeTeam || "").toLowerCase()) && text.includes(String(game.awayTeam || "").toLowerCase());
-      })?.odds;
       return {
         id: compactGameKey(game.homeTeam, game.awayTeam, game.eventId || index + 1),
         eventId: game.eventId || null,
@@ -610,8 +588,6 @@ function enrichGames(games = [], sideCards = []) {
         homeScore,
         awayScore,
         score: homeScore !== null && awayScore !== null ? `${homeScore} x ${awayScore}` : null,
-        odds1x2: relatedSideOdds || odds,
-        liveOdd: relatedSideOdds?.draw || odds.draw || null,
         href: game.href || null,
         rawText: game.rawText || null,
         rawLines: game.rawLines || [],
@@ -1240,29 +1216,65 @@ function chooseBestLiveStatus(game, details) {
   return detailRank > gameRank ? detailStatus : gameStatus;
 }
 
+function rememberStats(eventId, stats) {
+  const key = String(eventId || "").trim();
+  if (!key || !stats || stats.unavailable) return;
+  statsMemory.set(key, { stats: { ...stats }, savedAt: Date.now() });
+}
+
+function rememberedStats(eventId) {
+  const key = String(eventId || "").trim();
+  if (!key) return null;
+  const item = statsMemory.get(key);
+  if (!item) return null;
+  const maxAgeMs = Math.max(60000, Number(process.env.SOFASCORE_BROWSER_STATS_MEMORY_MS || DEFAULT_STATS_MEMORY_MS));
+  if (Date.now() - item.savedAt > maxAgeMs) {
+    statsMemory.delete(key);
+    return null;
+  }
+  return { ...item.stats, sourceDetail: `${item.stats.sourceDetail || item.stats.source || "stats"}:cache` };
+}
+
+function visualStatsSelection(games = [], maxVisualStats = 0) {
+  if (!maxVisualStats || !games.length) return new Set();
+  const candidates = games.filter((game) => game.eventId && !rememberedStats(game.eventId));
+  if (!candidates.length) return new Set();
+  const selected = new Set();
+  for (let offset = 0; offset < Math.min(maxVisualStats, candidates.length); offset += 1) {
+    const game = candidates[(visualStatsCursor + offset) % candidates.length];
+    selected.add(String(game.eventId));
+  }
+  visualStatsCursor = (visualStatsCursor + Math.min(maxVisualStats, candidates.length)) % candidates.length;
+  return selected;
+}
+
 async function attachRealStatistics(page, games = []) {
   const maxStats = Math.max(1, Number(process.env.SOFASCORE_BROWSER_MAX_STATS_FETCH || 40));
-  const maxVisualStats = Math.max(0, Number(process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH || 0));
+  const maxVisualStats = Math.max(0, Number(process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH || 4));
   const delayMs = Math.max(0, Number(process.env.SOFASCORE_BROWSER_STATS_DELAY_MS || 75));
+  const statsCandidates = games.slice(0, maxStats);
+  const visualStatsEventIds = visualStatsSelection(statsCandidates, maxVisualStats);
   const statsByEventId = await fetchManyGameStatisticsFromPage(
     page,
-    games.slice(0, maxStats).map((game) => game.eventId)
+    statsCandidates.map((game) => game.eventId)
   );
   const enriched = [];
-  let visualStatsCount = 0;
   for (const game of games) {
     if (enriched.length >= maxStats) {
       enriched.push({ ...game, stats: game.stats || emptyStats() });
       continue;
     }
     let details = null;
-    let stats = statsByEventId.get(String(game.eventId || "")) || emptyStats();
-    if (stats.unavailable && visualStatsCount < maxVisualStats) {
+    const eventId = String(game.eventId || "");
+    let stats = statsByEventId.get(eventId) || emptyStats();
+    if (stats.unavailable) stats = rememberedStats(eventId) || stats;
+    if (!stats.unavailable) rememberStats(eventId, stats);
+    if (stats.unavailable && visualStatsEventIds.has(eventId)) {
       details = await fetchGameDetailsFromPage(page, game.eventId);
       const visualStats = await fetchGameStatisticsVisually(page, { ...game, ...(details || {}) });
       if (!visualStats.unavailable) stats = visualStats;
       if (visualStats.unavailable && visualStats.sourceDetail) stats = visualStats;
-      visualStatsCount += 1;
+      if (!stats.unavailable) rememberStats(eventId, stats);
     }
     const status = chooseBestLiveStatus(game, details);
     const minute = minuteFromStatus(status) || Number(game.minute || details?.minute || 0);
