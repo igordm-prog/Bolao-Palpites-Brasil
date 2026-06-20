@@ -461,7 +461,7 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
     match.scoreboard = game.score || match.scoreboard;
     match.odds1x2 = game.odds1x2 || null;
     match.eventId = game.eventId || null;
-    match.link = sofaScorePublicLink(game.href);
+    match.link = sofaScorePublicLink(game.href, game);
     match.statsEstimated = Boolean(match.stats?.estimated || match.stats?.unavailable || game.stats?.estimated || game.stats?.unavailable);
     return match;
   });
@@ -526,12 +526,16 @@ function minuteFromSofaScoreStatus(status) {
   return minute > 0 && minute <= 130 ? minute : 0;
 }
 
-function sofaScorePublicLink(href) {
+function sofaScorePublicLink(href, game = {}) {
   const raw = String(href || "").trim();
   if (!raw) return DEFAULT_SOFASCORE_PUBLIC_URL;
   try {
     const url = new URL(raw);
     if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return DEFAULT_SOFASCORE_PUBLIC_URL;
+    const customId = String(game.customId || "").trim();
+    if (customId && /\/football\/match\/[^/]+\/?$/i.test(url.pathname)) {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/${customId}`;
+    }
     if (url.pathname === "/" || url.pathname === "/pt/" || !url.pathname) url.pathname = "/pt/futebol/";
     return url.toString();
   } catch {

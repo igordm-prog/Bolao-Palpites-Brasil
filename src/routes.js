@@ -205,6 +205,7 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
   const games = (result.games || []).map((game, index) => ({
     id: `${Date.now()}-${index + 1}`,
     eventId: game.eventId || null,
+    customId: game.customId || null,
     competition: game.competition || null,
     group: game.group || null,
     time: game.time,

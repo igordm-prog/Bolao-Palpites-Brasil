@@ -598,6 +598,7 @@ function enrichGames(games = [], sideCards = []) {
       return {
         id: compactGameKey(game.homeTeam, game.awayTeam, game.eventId || index + 1),
         eventId: game.eventId || null,
+        customId: game.customId || null,
         competition: game.competition || game.league || "SofaScore",
         group: game.group || null,
         time: game.time || null,
@@ -716,6 +717,15 @@ function cleanValue(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
 }
 
+function sofaScoreEventHref(event = {}) {
+  const slug = cleanValue(event.slug || "");
+  if (!slug) return null;
+  const customId = cleanValue(event.customId || event.customID || event.custom_id || "");
+  const id = event.id ? `#id:${event.id}` : "";
+  const path = customId ? `${slug}/${customId}` : slug;
+  return `https://www.sofascore.com/pt/football/match/${path}${id}`;
+}
+
 function statusFromSofaScoreEvent(event) {
   const description = cleanValue(event.status?.description || event.status?.type || "");
   const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
@@ -756,7 +766,8 @@ function mapSofaScoreEventsToGames(events = [], source = "api_in_browser") {
       const status = statusFromSofaScoreEvent(event);
       return {
         eventId: event.id ? String(event.id) : null,
-        href: event.slug ? `https://www.sofascore.com/pt/football/match/${event.slug}${event.id ? `#id:${event.id}` : ""}` : null,
+        customId: event.customId || null,
+        href: sofaScoreEventHref(event),
         rawText: cleanValue(`${competition} | ${group} | ${homeTeam} x ${awayTeam} | ${status}`),
         rawLines: [competition, group, timeFromSofaScoreEvent(event), status, homeTeam, awayTeam, homeScore, awayScore].filter((item) => item !== null && item !== undefined && item !== ""),
         time: timeFromSofaScoreEvent(event),
@@ -863,7 +874,8 @@ async function fetchLiveEventsFromPage(page) {
       const status = statusFromEvent(event);
       return {
         eventId: event.id ? String(event.id) : null,
-        href: event.slug ? `https://www.sofascore.com/pt/football/match/${event.slug}${event.id ? `#id:${event.id}` : ""}` : null,
+        customId: event.customId || null,
+        href: event.slug ? `https://www.sofascore.com/pt/football/match/${event.slug}${event.customId ? `/${event.customId}` : ""}${event.id ? `#id:${event.id}` : ""}` : null,
         rawText: clean(`${competition} | ${group} | ${homeTeam} x ${awayTeam} | ${status}`),
         rawLines: [competition, group, timeFromEvent(event), status, homeTeam, awayTeam, homeScore, awayScore].filter((item) => item !== null && item !== undefined && item !== ""),
         time: timeFromEvent(event),
