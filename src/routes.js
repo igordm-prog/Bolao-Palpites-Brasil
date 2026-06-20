@@ -6,7 +6,7 @@ const { requireAuth, requireAdmin } = require("./middleware/auth");
 const { createPixDepositCharge, createPixWithdrawalTransfer, getAsaasPayment, isAsaasEnabled } = require("./services/asaas");
 const { audit } = require("./services/audit");
 const { dashboardFromSofaScoreSnapshot, getLiveEntriesDashboard, isSofaScoreLiveGame, refreshLiveEntries } = require("./services/liveEntries");
-const { runSofaScoreBrowserProbe } = require("./services/sofascoreBrowser");
+const { runSofaScoreBrowserProbe, runSofaScoreStatisticsProbe } = require("./services/sofascoreBrowser");
 const {
   isEmailEnabled,
   sendEmailVerificationCode,
@@ -202,6 +202,12 @@ function normalizeSofaScoreBrowserUrl(value) {
 }
 
 function saveSofaScoreSnapshot(data, store, result, userId) {
+  const previousSnapshot = latestSofaScoreSnapshot(data, { onlyOk: true });
+  const previousStats = new Map(
+    (previousSnapshot?.games || [])
+      .filter((game) => game.eventId && game.stats && !game.stats.unavailable)
+      .map((game) => [String(game.eventId), game.stats])
+  );
   const games = (result.games || []).map((game, index) => ({
     id: `${Date.now()}-${index + 1}`,
     eventId: game.eventId || null,
@@ -219,7 +225,9 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     awayScore: game.awayScore,
     score: game.score || null,
     href: game.href || null,
-    stats: game.stats || null,
+    stats: game.stats && !game.stats.unavailable
+      ? game.stats
+      : previousStats.get(String(game.eventId || "")) || game.stats || null,
     rawText: game.rawText || null,
     rawLines: game.rawLines || [],
     capturedAt: result.finishedAt
@@ -255,7 +263,12 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
 async function updateSofaScoreCache(store, options = {}) {
   const url = normalizeSofaScoreBrowserUrl(options.url);
   if (!url) throw new Error("Use uma URL valida do SofaScore.");
-  const result = await runSofaScoreBrowserProbe({ url });
+  const result = await runSofaScoreBrowserProbe({
+    url,
+    includeStatistics: options.includeStatistics !== false,
+    captureDelayMs: options.captureDelayMs,
+    statistics: options.statistics
+  });
   let snapshot;
   store.update((data) => {
     normalizeData(data);
@@ -286,8 +299,48 @@ function startSofaScoreAutoMonitor(store, options = {}) {
   const intervalMs = Math.max(120000, Number(options.intervalMs || process.env.SOFASCORE_AUTO_INTERVAL_MS || 120000));
   const startDelayMs = Math.max(10000, Number(options.startDelayMs || process.env.SOFASCORE_AUTO_START_DELAY_MS || 15000));
   let running = false;
+  let statisticsRunning = false;
   let stopped = false;
   let timer = null;
+
+  async function updateStatistics(games) {
+    if (statisticsRunning || stopped || !games?.length) return;
+    statisticsRunning = true;
+    const started = Date.now();
+    try {
+      const result = await runSofaScoreStatisticsProbe(games, {
+        maxStats: Number(process.env.SOFASCORE_AUTO_MAX_STATS_FETCH || 40),
+        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || 2)
+      });
+      if (!result.ok || !result.games.length) {
+        console.log(`[SofaScore] Estatisticas em segundo plano indisponiveis: ${result.error || "sem dados"}.`);
+        return;
+      }
+      let mergedCount = 0;
+      store.update((data) => {
+        normalizeData(data);
+        const latest = latestSofaScoreSnapshot(data, { onlyOk: true });
+        if (!latest) return;
+        const statsByEvent = new Map(
+          result.games
+            .filter((game) => game.eventId && game.stats && !game.stats.unavailable)
+            .map((game) => [String(game.eventId), game.stats])
+        );
+        latest.games.forEach((game) => {
+          const stats = statsByEvent.get(String(game.eventId || ""));
+          if (!stats) return;
+          game.stats = stats;
+          mergedCount += 1;
+        });
+        latest.statsUpdatedAt = todayIso();
+      });
+      console.log(`[SofaScore] Estatisticas atualizadas em segundo plano: ${mergedCount} jogos em ${Math.round((Date.now() - started) / 1000)}s.`);
+    } catch (error) {
+      console.error(`[SofaScore] Falha ao atualizar estatisticas em segundo plano: ${error.message}`);
+    } finally {
+      statisticsRunning = false;
+    }
+  }
 
   async function run(reason) {
     if (stopped) return;
@@ -299,7 +352,11 @@ function startSofaScoreAutoMonitor(store, options = {}) {
     const started = Date.now();
     console.log(`[SofaScore] Iniciando leitura automatica (${reason})...`);
     try {
-      const { result, snapshot } = await updateSofaScoreCache(store, { source: `auto:${reason}` });
+      const { result, snapshot } = await updateSofaScoreCache(store, {
+        source: `auto:${reason}`,
+        includeStatistics: false,
+        captureDelayMs: Number(process.env.SOFASCORE_AUTO_CAPTURE_DELAY_MS || 600)
+      });
       const status = result.ok ? "ok" : `erro: ${result.error}`;
       const sampleStatuses = (snapshot?.games || [])
         .slice(0, 8)
@@ -311,6 +368,7 @@ function startSofaScoreAutoMonitor(store, options = {}) {
         .map((game) => `${game.homeTeam || "?"}:${game.stats?.source || "sem_stats"}${game.stats?.sourceDetail ? `:${game.stats.sourceDetail}` : ""}`)
         .join(" | ");
       console.log(`[SofaScore] Cache automatico ${status} em ${Math.round((Date.now() - started) / 1000)}s. Jogos ao vivo: ${snapshot?.liveGamesCount || 0}/${snapshot?.gamesCount || 0}. Estatisticas: ${statsCount}/${snapshot?.gamesCount || 0}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}${sampleStats ? ` Stats: ${sampleStats}` : ""}`);
+      if (result.ok && snapshot?.games?.length) updateStatistics(snapshot.games);
     } catch (error) {
       console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
     } finally {

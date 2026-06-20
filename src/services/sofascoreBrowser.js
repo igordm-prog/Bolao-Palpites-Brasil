@@ -1289,10 +1289,12 @@ function visualStatsSelection(games = [], maxVisualStats = 0) {
   return selected;
 }
 
-async function attachRealStatistics(page, games = []) {
-  const maxStats = Math.max(1, Number(process.env.SOFASCORE_BROWSER_MAX_STATS_FETCH || 40));
-  const maxVisualStats = Math.max(0, Number(process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH || 4));
-  const delayMs = Math.max(0, Number(process.env.SOFASCORE_BROWSER_STATS_DELAY_MS || 75));
+async function attachRealStatistics(page, games = [], options = {}) {
+  const maxStats = Math.max(1, Number(options.maxStats || process.env.SOFASCORE_BROWSER_MAX_STATS_FETCH || 40));
+  const maxVisualStats = Math.max(0, Number(
+    options.maxVisualStats ?? process.env.SOFASCORE_BROWSER_MAX_VISUAL_STATS_FETCH ?? 4
+  ));
+  const delayMs = Math.max(0, Number(options.delayMs ?? process.env.SOFASCORE_BROWSER_STATS_DELAY_MS ?? 75));
   const statsCandidates = games.slice(0, maxStats);
   const visualStatsEventIds = visualStatsSelection(statsCandidates, maxVisualStats);
   const statsByEventId = await fetchManyGameStatisticsFromPage(
@@ -1547,10 +1549,13 @@ async function runSofaScoreBrowserProbe(options = {}) {
     if ((response?.status && response.status() >= 400) || payload.textLength < 100 || lines.some((line) => /forbidden|\"code\":\s*403/i.test(line))) {
       throw new Error(`SofaScore bloqueou a leitura do navegador${response?.status ? `: HTTP ${response.status()}` : ""}.`);
     }
-    const games = await attachRealStatistics(
-      page,
-      enrichGames(payload.games?.length ? payload.games : inferGamesFromLines(lines), payload.sideCards)
+    const capturedGames = enrichGames(
+      payload.games?.length ? payload.games : inferGamesFromLines(lines),
+      payload.sideCards
     );
+    const games = options.includeStatistics === false
+      ? capturedGames
+      : await attachRealStatistics(page, capturedGames, options.statistics || {});
     await browser.close();
     return {
       ok: true,
@@ -1591,8 +1596,50 @@ async function runSofaScoreBrowserProbe(options = {}) {
   }
 }
 
+async function runSofaScoreStatisticsProbe(games = [], options = {}) {
+  const selectedGames = (games || []).filter((game) => game?.eventId);
+  if (!selectedGames.length) return { ok: true, games: [], error: null };
+  let browser;
+  try {
+    const { chromium } = await import("playwright");
+    browser = await chromium.launch({
+      headless: process.env.SOFASCORE_BROWSER_HEADLESS !== "false",
+      args: ["--disable-dev-shm-usage", "--no-sandbox"]
+    });
+    const context = await browser.newContext({
+      locale: "pt-BR",
+      timezoneId: "America/Sao_Paulo",
+      viewport: { width: 1365, height: 768 },
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+    });
+    const page = await context.newPage();
+    const timeoutMs = boundedTimeout(
+      options.timeoutMs || process.env.SOFASCORE_BROWSER_TIMEOUT_MS,
+      DEFAULT_TIMEOUT_MS,
+      MAX_BROWSER_NAVIGATION_TIMEOUT_MS
+    );
+    await page.goto(options.url || process.env.SOFASCORE_BROWSER_URL || DEFAULT_SOFASCORE_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: timeoutMs
+    });
+    await page.waitForTimeout(Math.max(1000, Number(process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS)));
+    const enriched = await attachRealStatistics(page, selectedGames, {
+      maxStats: options.maxStats || 40,
+      maxVisualStats: options.maxVisualStats ?? 2,
+      delayMs: options.delayMs ?? 50
+    });
+    await browser.close();
+    return { ok: true, games: enriched, error: null };
+  } catch (error) {
+    if (browser) await browser.close().catch(() => {});
+    return { ok: false, games: [], error: friendlyBrowserError(error) };
+  }
+}
+
 module.exports = {
   runSofaScoreBrowserProbe,
+  runSofaScoreStatisticsProbe,
   __private: {
     parseSofaScoreStatistics,
     parseVisualStatisticsLines
