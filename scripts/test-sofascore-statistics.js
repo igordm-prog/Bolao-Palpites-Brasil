@@ -112,4 +112,39 @@ assert.strictEqual(visualOnlyXg.unavailable, false);
 assert.strictEqual(visualOnlyXg.sourceDetail, "visual_statistics_tab:xg");
 assert.strictEqual(visualOnlyXg.expectedGoals, 1.07);
 
+const realPanelVisual = parseVisualStatisticsLines([
+  "Visão geral da partida",
+  "53%",
+  "Posse de bola",
+  "47%",
+  "0.28",
+  "Gols esperados (xG)",
+  "1.00",
+  "0",
+  "Grandes chances",
+  "2",
+  "4",
+  "Finalizações",
+  "10",
+  "2",
+  "Defesas do goleiro",
+  "0",
+  "1",
+  "Escanteios",
+  "3",
+  "7",
+  "Faltas",
+  "7"
+]);
+
+assert.strictEqual(realPanelVisual.unavailable, false);
+assert.strictEqual(realPanelVisual.possessionHome, 53);
+assert.strictEqual(realPanelVisual.possessionAway, 47);
+assert.strictEqual(realPanelVisual.expectedGoalsHome, 0.28);
+assert.strictEqual(realPanelVisual.expectedGoalsAway, 1);
+assert.strictEqual(realPanelVisual.homeTotalShots, 4);
+assert.strictEqual(realPanelVisual.awayTotalShots, 10);
+assert.strictEqual(realPanelVisual.homeCorners, 1);
+assert.strictEqual(realPanelVisual.awayCorners, 3);
+
 console.log("Estatisticas SofaScore OK");

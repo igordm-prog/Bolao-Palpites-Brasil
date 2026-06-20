@@ -17,6 +17,35 @@ function boundedTimeout(value, fallback, maximum) {
   return Math.min(maximum, Math.max(3000, Number.isFinite(parsed) ? parsed : fallback));
 }
 
+async function launchSofaScoreSession(options = {}) {
+  const { chromium } = await import("playwright");
+  const contextOptions = {
+    locale: "pt-BR",
+    timezoneId: "America/Sao_Paulo",
+    viewport: { width: 1365, height: 768 },
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+  };
+  const launchOptions = {
+    headless: options.headless ?? process.env.SOFASCORE_BROWSER_HEADLESS !== "false",
+    args: ["--disable-dev-shm-usage", "--no-sandbox"]
+  };
+  const channel = options.channel || process.env.SOFASCORE_BROWSER_CHANNEL;
+  if (channel) launchOptions.channel = channel;
+  const userDataDir = options.userDataDir || process.env.SOFASCORE_BROWSER_USER_DATA_DIR;
+  if (userDataDir) {
+    const context = await chromium.launchPersistentContext(userDataDir, {
+      ...contextOptions,
+      ...launchOptions,
+      args: [...launchOptions.args, "--no-first-run"]
+    });
+    return { context, close: () => context.close() };
+  }
+  const browser = await chromium.launch(launchOptions);
+  const context = await browser.newContext(contextOptions);
+  return { context, close: () => browser.close() };
+}
+
 function normalizeLine(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
 }
@@ -1085,9 +1114,13 @@ async function clickFullscreenView(page) {
 
 async function collectStatisticsPanelLines(page) {
   return page.evaluate(() => {
-    const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
+    const cleanLine = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
+    const textLines = (value = "") => String(value || "")
+      .split("\n")
+      .map(cleanLine)
+      .filter(Boolean);
     const normalize = (value = "") =>
-      clean(value)
+      cleanLine(value)
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "");
@@ -1104,18 +1137,24 @@ async function collectStatisticsPanelLines(page) {
     const panels = Array.from(document.querySelectorAll("main,section,article,aside,div"))
       .map((element) => {
         const rect = element.getBoundingClientRect();
-        const text = clean(element.innerText || element.textContent || "");
-        return { element, rect, text, key: normalize(text) };
+        const lines = textLines(element.innerText || element.textContent || "");
+        const key = normalize(lines.join(" "));
+        const markerCount = markers.filter((marker) => key.includes(marker)).length;
+        const isOverview = key.includes("visao geral da partida") || key.includes("match overview");
+        return { element, rect, lines, key, markerCount, isOverview };
       })
       .filter(({ rect, key }) =>
         rect.width >= 260 &&
         rect.height >= 160 &&
         markers.some((marker) => key.includes(marker))
       )
-      .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
+      .sort((a, b) =>
+        Number(b.isOverview) - Number(a.isOverview) ||
+        b.markerCount - a.markerCount ||
+        (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height)
+      );
 
-    const source = panels[0]?.text || document.body.innerText || "";
-    return source.split("\n").map(clean).filter(Boolean).slice(0, 520);
+    return (panels[0]?.lines || textLines(document.body.innerText || "")).slice(0, 520);
   });
 }
 
@@ -1203,6 +1242,12 @@ async function openGameStatisticsPage(page, game = {}) {
     await clickStatisticsTab(detailPage);
     await detailPage.waitForLoadState("networkidle", { timeout: 7000 }).catch(() => {});
     await detailPage.waitForTimeout(Math.max(700, Number(process.env.SOFASCORE_BROWSER_STATS_NETWORK_SETTLE_MS || 1200)));
+    await detailPage.waitForFunction(() =>
+      /Vis[aã]o geral da partida|Match overview|Posse de bola|Ball possession|Gols esperados|Expected goals|Finaliza[cç][oõ]es|Total shots/i
+        .test(document.body.innerText || ""),
+      null,
+      { timeout: 10000 }
+    ).catch(() => {});
     return {
       page: detailPage,
       sourceDetail: openedFromList ? "visual_list_fullscreen_statistics" : "visual_fullscreen_statistics",
@@ -1385,21 +1430,11 @@ async function runSofaScoreBrowserProbe(options = {}) {
   const captureDelayMs = Math.max(400, Number(options.captureDelayMs || process.env.SOFASCORE_BROWSER_CAPTURE_DELAY_MS || DEFAULT_CAPTURE_DELAY_MS));
   const maxCaptureSteps = Math.max(10, Number(options.maxCaptureSteps || process.env.SOFASCORE_BROWSER_MAX_CAPTURE_STEPS || DEFAULT_MAX_CAPTURE_STEPS));
   const maxEmptyCaptureSteps = Math.max(3, Number(options.maxEmptyCaptureSteps || process.env.SOFASCORE_BROWSER_MAX_EMPTY_CAPTURE_STEPS || DEFAULT_MAX_EMPTY_CAPTURE_STEPS));
-  let browser;
+  let session;
 
   try {
-    const { chromium } = await import("playwright");
-    browser = await chromium.launch({
-      headless: process.env.SOFASCORE_BROWSER_HEADLESS !== "false",
-      args: ["--disable-dev-shm-usage", "--no-sandbox"]
-    });
-    const context = await browser.newContext({
-      locale: "pt-BR",
-      timezoneId: "America/Sao_Paulo",
-      viewport: { width: 1365, height: 768 },
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
-    });
+    session = await launchSofaScoreSession(options);
+    const { context } = session;
     const page = await context.newPage();
     const apiNetworkGames = [];
     page.on("response", async (networkResponse) => {
@@ -1592,7 +1627,7 @@ async function runSofaScoreBrowserProbe(options = {}) {
     const games = options.includeStatistics === false
       ? capturedGames
       : await attachRealStatistics(page, capturedGames, options.statistics || {});
-    await browser.close();
+    await session.close();
     return {
       ok: true,
       provider: "browser_sofascore",
@@ -1608,9 +1643,9 @@ async function runSofaScoreBrowserProbe(options = {}) {
       error: null
     };
   } catch (error) {
-    if (browser) {
+    if (session) {
       try {
-        await browser.close();
+        await session.close();
       } catch {
         // Ignore cleanup failure.
       }
@@ -1635,20 +1670,10 @@ async function runSofaScoreBrowserProbe(options = {}) {
 async function runSofaScoreStatisticsProbe(games = [], options = {}) {
   const selectedGames = (games || []).filter((game) => game?.eventId);
   if (!selectedGames.length) return { ok: true, games: [], error: null };
-  let browser;
+  let session;
   try {
-    const { chromium } = await import("playwright");
-    browser = await chromium.launch({
-      headless: process.env.SOFASCORE_BROWSER_HEADLESS !== "false",
-      args: ["--disable-dev-shm-usage", "--no-sandbox"]
-    });
-    const context = await browser.newContext({
-      locale: "pt-BR",
-      timezoneId: "America/Sao_Paulo",
-      viewport: { width: 1365, height: 768 },
-      userAgent:
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36"
-    });
+    session = await launchSofaScoreSession(options);
+    const { context } = session;
     const page = await context.newPage();
     const timeoutMs = boundedTimeout(
       options.timeoutMs || process.env.SOFASCORE_BROWSER_TIMEOUT_MS,
@@ -1665,10 +1690,10 @@ async function runSofaScoreStatisticsProbe(games = [], options = {}) {
       maxVisualStats: options.maxVisualStats ?? 2,
       delayMs: options.delayMs ?? 50
     });
-    await browser.close();
+    await session.close();
     return { ok: true, games: enriched, error: null };
   } catch (error) {
-    if (browser) await browser.close().catch(() => {});
+    if (session) await session.close().catch(() => {});
     return { ok: false, games: [], error: friendlyBrowserError(error) };
   }
 }
@@ -1677,6 +1702,7 @@ module.exports = {
   runSofaScoreBrowserProbe,
   runSofaScoreStatisticsProbe,
   __private: {
+    collectStatisticsPanelLines,
     openGameStatisticsPage,
     parseSofaScoreStatistics,
     parseVisualStatisticsLines
