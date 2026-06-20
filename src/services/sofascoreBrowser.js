@@ -4,7 +4,7 @@ const DEFAULT_SETTLE_MS = 5000;
 const DEFAULT_CAPTURE_DELAY_MS = 1000;
 const DEFAULT_MAX_CAPTURE_STEPS = 80;
 const DEFAULT_MAX_EMPTY_CAPTURE_STEPS = 8;
-const IGNORED_COMPETITIONS = new Set(["club friendly games mundo"]);
+const IGNORED_COMPETITIONS = new Set(["club friendly games mundo", "club friendly games world"]);
 
 function normalizeLine(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
@@ -130,7 +130,7 @@ function isIgnoredCompetition(game = {}) {
     game.league,
     game.rawText
   ].map(normalizeKey);
-  return keys.some((key) => IGNORED_COMPETITIONS.has(key) || key.includes("club friendly games mundo"));
+  return keys.some((key) => IGNORED_COMPETITIONS.has(key) || key.includes("club friendly games mundo") || key.includes("club friendly games world"));
 }
 
 function isLiveSofaScoreEvent(event = {}) {
@@ -417,6 +417,23 @@ function numberNearLabel(lines, labelPatterns) {
   return 0;
 }
 
+function urlWithHashToken(rawUrl, token) {
+  try {
+    const url = new URL(rawUrl || DEFAULT_SOFASCORE_URL);
+    const hash = String(url.hash || "").replace(/^#/, "");
+    const cleanHash = hash
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .filter((item) => !item.startsWith(token.split(":")[0] + ":"));
+    cleanHash.push(token);
+    url.hash = cleanHash.join(",");
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function decimalPairNearLabel(lines, labelPatterns) {
   const normalizedLines = lines.map((line) => normalizeLine(line));
   for (let index = 0; index < normalizedLines.length; index += 1) {
@@ -461,7 +478,7 @@ function sidePercentNearLabel(lines, labelPatterns) {
 
 function parseVisualStatisticsLines(lines = []) {
   const totalShots = numberNearLabel(lines, ["finalizacoes", "total shots"]);
-  const shotsOnTarget = numberNearLabel(lines, ["finalizacoes no alvo", "shots on target"]);
+  const shotsOnTarget = numberNearLabel(lines, ["finalizacoes no alvo", "finalizacoes no gol", "chutes no alvo", "chutes ao gol", "shots on target"]);
   const shotsOffTarget = numberNearLabel(lines, ["finalizacoes para fora", "shots off target"]);
   const blockedShots = numberNearLabel(lines, ["finalizacoes bloqueadas", "blocked shots"]);
   const corners = numberNearLabel(lines, ["escanteios", "corner"]);
@@ -545,21 +562,15 @@ function gameKey(game = {}, fallback = "") {
   return game.eventId || compactGameKey(game.homeTeam, game.awayTeam, game.time || game.status || fallback);
 }
 
-function statisticsUrlForGame(game = {}) {
+function detailUrlForGame(game = {}) {
   const raw = String(game.href || "").trim();
-  if (!raw && !game.eventId) return null;
+  if (!raw) return null;
   try {
-    const url = new URL(raw || DEFAULT_SOFASCORE_URL);
+    const url = new URL(raw);
     if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
     const eventId = String(game.eventId || "").trim();
-    const cleanHash = String(url.hash || "").replace(/^#/, "");
-    if (cleanHash.includes("tab:statistics")) return url.toString();
-    if (cleanHash.includes("id:")) {
-      url.hash = `#${cleanHash.replace(/,?tab:[^,]+/g, "")},tab:statistics`;
-    } else if (eventId) {
-      url.hash = `#id:${eventId},tab:statistics`;
-    } else {
-      url.hash = "#tab:statistics";
+    if (eventId && !String(url.hash || "").includes(`id:${eventId}`)) {
+      url.hash = `id:${eventId}`;
     }
     return url.toString();
   } catch {
@@ -988,6 +999,40 @@ async function clickStatisticsTab(page) {
   return clicked;
 }
 
+async function clickFullscreenView(page) {
+  const clicked = await page.evaluate(() => {
+    const normalize = (value = "") =>
+      String(value)
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+    const candidates = Array.from(document.querySelectorAll("a,button,div,span"))
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { element, rect, text: normalize(element.innerText || element.textContent || "") };
+      })
+      .filter(({ rect, text }) =>
+        rect.width >= 80 &&
+        rect.height >= 20 &&
+        /visualizacao em tela cheia|full screen|fullscreen/.test(text)
+      )
+      .sort((a, b) => b.rect.x - a.rect.x || a.rect.y - b.rect.y);
+    const target = candidates[0]?.element;
+    if (!target) return false;
+    const clickable = target.closest("a,button") || target;
+    clickable.click();
+    return true;
+  }).catch(() => false);
+
+  if (clicked) {
+    await page.waitForLoadState("domcontentloaded", { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(Math.max(1200, Number(process.env.SOFASCORE_BROWSER_FULLSCREEN_SETTLE_MS || 1800)));
+  }
+  return clicked;
+}
+
 async function collectStatisticsPanelLines(page) {
   return page.evaluate(() => {
     const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
@@ -1015,7 +1060,6 @@ async function collectStatisticsPanelLines(page) {
       .filter(({ rect, key }) =>
         rect.width >= 260 &&
         rect.height >= 160 &&
-        rect.x >= Math.floor(window.innerWidth * 0.35) &&
         markers.some((marker) => key.includes(marker))
       )
       .sort((a, b) => (a.rect.width * a.rect.height) - (b.rect.width * b.rect.height));
@@ -1025,25 +1069,97 @@ async function collectStatisticsPanelLines(page) {
   });
 }
 
-async function fetchGameStatisticsVisually(page, game = {}) {
+async function openGameStatisticsPage(page, game = {}) {
+  const context = page.context();
+  const detailPage = await context.newPage();
+  const detailUrl = detailUrlForGame(game);
+  const statisticsPayloads = [];
+  detailPage.on("response", async (response) => {
+    try {
+      const responseUrl = response.url();
+      if (!/\/api\/v1\/event\/\d+\/statistics/i.test(responseUrl)) return;
+      const contentType = response.headers()["content-type"] || "";
+      if (!/json/i.test(contentType) || !response.ok()) return;
+      const json = await response.json();
+      statisticsPayloads.push({ path: responseUrl, json });
+    } catch {
+      // Statistics network response could be unavailable or already consumed.
+    }
+  });
+
   try {
-    const statsUrl = statisticsUrlForGame(game);
-    if (statsUrl) {
-      await page.goto(statsUrl, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) });
-      await page.waitForTimeout(Math.max(1600, Number(process.env.SOFASCORE_BROWSER_PANEL_SETTLE_MS || 2200)));
+    if (detailUrl) {
+      await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) });
+      await detailPage.waitForTimeout(Math.max(1400, Number(process.env.SOFASCORE_BROWSER_PANEL_SETTLE_MS || 2200)));
     } else {
-      const opened = await clickEventInCurrentList(page, game);
-      if (!opened) return emptyStats({ sourceDetail: "visual_event_not_found" });
+      await detailPage.goto(DEFAULT_SOFASCORE_URL, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) });
+      await detailPage.waitForTimeout(Math.max(1000, Number(process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS)));
+      await clickLiveFilter(detailPage);
+      const opened = await clickEventInCurrentList(detailPage, game);
+      if (!opened) {
+        await detailPage.close().catch(() => {});
+        return { page: null, sourceDetail: "visual_event_not_found" };
+      }
+      await clickFullscreenView(detailPage);
     }
 
-    const tabClicked = await clickStatisticsTab(page);
-    if (!tabClicked && !/tab:statistics/i.test(page.url())) return emptyStats({ sourceDetail: "visual_statistics_tab_not_found" });
+    await clickFullscreenView(detailPage);
+    const eventId = String(game.eventId || "").trim();
+    const currentUrl = detailPage.url();
+    if (eventId && !currentUrl.includes(eventId)) {
+      await detailPage.close().catch(() => {});
+      return { page: null, sourceDetail: "visual_event_id_not_confirmed" };
+    }
 
-    await page.waitForFunction(() => /Vis[aã]o geral da partida|Match overview|Posse de bola|Ball possession|Gols esperados|Expected goals|Finaliza[cç][oõ]es|Total shots/i.test(document.body.innerText || ""), null, { timeout: 5000 }).catch(() => {});
-    const lines = await collectStatisticsPanelLines(page);
-    return parseVisualStatisticsLines(lines);
+    const statsUrl = urlWithHashToken(currentUrl, "tab:statistics");
+    if (statsUrl && statsUrl !== currentUrl) {
+      await detailPage.goto(statsUrl, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) }).catch(() => {});
+      await detailPage.waitForTimeout(Math.max(1200, Number(process.env.SOFASCORE_BROWSER_STATS_TAB_SETTLE_MS || 1800)));
+    }
+    await clickStatisticsTab(detailPage);
+    await detailPage.waitForLoadState("networkidle", { timeout: 7000 }).catch(() => {});
+    await detailPage.waitForTimeout(Math.max(700, Number(process.env.SOFASCORE_BROWSER_STATS_NETWORK_SETTLE_MS || 1200)));
+    return { page: detailPage, sourceDetail: "visual_fullscreen_statistics", statisticsPayloads };
+  } catch {
+    await detailPage.close().catch(() => {});
+    return { page: null, sourceDetail: "visual_fullscreen_error" };
+  }
+}
+
+async function fetchGameStatisticsVisually(page, game = {}) {
+  let detailPage = null;
+  try {
+    const opened = await openGameStatisticsPage(page, game);
+    if (!opened.page) return emptyStats({ sourceDetail: opened.sourceDetail || "visual_event_not_found" });
+    detailPage = opened.page;
+
+    const networkStats = parseSofaScoreStatistics(opened.statisticsPayloads || []);
+    if (!networkStats.unavailable) {
+      networkStats.source = "sofascore_fullscreen_network_statistics";
+      networkStats.sourceDetail = "fullscreen_network_statistics";
+      return networkStats;
+    }
+
+    const eventId = String(game.eventId || "").trim();
+    const directStats = eventId ? await fetchGameStatisticsFromPage(detailPage, eventId) : emptyStats();
+    if (!directStats.unavailable) {
+      directStats.source = "sofascore_fullscreen_direct_statistics";
+      directStats.sourceDetail = "fullscreen_direct_statistics";
+      return directStats;
+    }
+
+    const tabClicked = await clickStatisticsTab(detailPage);
+    if (!tabClicked && !/tab:statistics/i.test(detailPage.url())) return emptyStats({ sourceDetail: "visual_statistics_tab_not_found" });
+
+    await detailPage.waitForFunction(() => /Vis[aã]o geral da partida|Match overview|Posse de bola|Ball possession|Gols esperados|Expected goals|Finaliza[cç][oõ]es|Total shots/i.test(document.body.innerText || ""), null, { timeout: 5000 }).catch(() => {});
+    const lines = await collectStatisticsPanelLines(detailPage);
+    const stats = parseVisualStatisticsLines(lines);
+    if (!stats.unavailable) stats.sourceDetail = opened.sourceDetail;
+    return stats;
   } catch {
     return emptyStats({ sourceDetail: "visual_statistics_error" });
+  } finally {
+    if (detailPage) await detailPage.close().catch(() => {});
   }
 }
 

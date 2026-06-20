@@ -5,7 +5,7 @@ const BETANO_TODAY_URL = "https://www.betano.bet.br/sport/futebol/jogos-de-hoje/
 const DEFAULT_CACHE_MS = 30000;
 const DEFAULT_MAX_FIXTURES = 8;
 const DEFAULT_API_TIMEOUT_MS = 8000;
-const IGNORED_COMPETITIONS = new Set(["club friendly games mundo"]);
+const IGNORED_COMPETITIONS = new Set(["club friendly games mundo", "club friendly games world"]);
 
 const leagueLinks = new Map([
   ["brasileirao serie a", "https://www.betano.bet.br/sport/futebol/brasil/brasileirao-serie-a-betano/10016/"],
@@ -503,7 +503,7 @@ function isIgnoredCompetition(game = {}) {
     game.league,
     game.rawText
   ].map(normalizeText);
-  return keys.some((key) => IGNORED_COMPETITIONS.has(key) || key.includes("club friendly games mundo"));
+  return keys.some((key) => IGNORED_COMPETITIONS.has(key) || key.includes("club friendly games mundo") || key.includes("club friendly games world"));
 }
 
 function sofaScoreDisplayStatus(game = {}) {
