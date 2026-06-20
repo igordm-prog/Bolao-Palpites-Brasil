@@ -1,7 +1,7 @@
-const CACHE_NAME = "bpb-static-v2";
+const CACHE_NAME = "bpb-static-v3";
 const STATIC_ASSETS = [
   "/offline.html",
-  "/css/styles.css",
+  "/css/styles.css?v=20260620-3",
   "/img/brand/favicon.svg",
   "/img/brand/logo-horizontal.svg",
   "/img/brand/logo-mark.svg",
@@ -37,7 +37,21 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (
-    url.pathname.startsWith("/css/") ||
+    url.pathname.startsWith("/css/")
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  if (
     url.pathname.startsWith("/img/") ||
     url.pathname === "/site.webmanifest"
   ) {

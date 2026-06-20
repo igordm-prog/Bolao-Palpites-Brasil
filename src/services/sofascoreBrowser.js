@@ -6,8 +6,16 @@ const DEFAULT_MAX_CAPTURE_STEPS = 80;
 const DEFAULT_MAX_EMPTY_CAPTURE_STEPS = 8;
 const IGNORED_COMPETITIONS = new Set(["club friendly games mundo", "club friendly games world"]);
 const DEFAULT_STATS_MEMORY_MS = 10 * 60 * 1000;
+const MAX_BROWSER_NAVIGATION_TIMEOUT_MS = 60000;
+const DEFAULT_DETAIL_NAVIGATION_TIMEOUT_MS = 12000;
+const MAX_DETAIL_NAVIGATION_TIMEOUT_MS = 20000;
 const statsMemory = new Map();
 let visualStatsCursor = 0;
+
+function boundedTimeout(value, fallback, maximum) {
+  const parsed = Number(value);
+  return Math.min(maximum, Math.max(3000, Number.isFinite(parsed) ? parsed : fallback));
+}
 
 function normalizeLine(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
@@ -1115,6 +1123,11 @@ async function openGameStatisticsPage(page, game = {}) {
   const context = page.context();
   const detailPage = await context.newPage();
   const detailUrl = detailUrlForGame(game);
+  const detailTimeoutMs = boundedTimeout(
+    process.env.SOFASCORE_BROWSER_DETAIL_TIMEOUT_MS,
+    DEFAULT_DETAIL_NAVIGATION_TIMEOUT_MS,
+    MAX_DETAIL_NAVIGATION_TIMEOUT_MS
+  );
   const statisticsPayloads = [];
   detailPage.on("response", async (response) => {
     try {
@@ -1131,10 +1144,10 @@ async function openGameStatisticsPage(page, game = {}) {
 
   try {
     if (detailUrl) {
-      await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) });
+      await detailPage.goto(detailUrl, { waitUntil: "domcontentloaded", timeout: detailTimeoutMs });
       await detailPage.waitForTimeout(Math.max(1400, Number(process.env.SOFASCORE_BROWSER_PANEL_SETTLE_MS || 2200)));
     } else {
-      await detailPage.goto(DEFAULT_SOFASCORE_URL, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) });
+      await detailPage.goto(DEFAULT_SOFASCORE_URL, { waitUntil: "domcontentloaded", timeout: detailTimeoutMs });
       await detailPage.waitForTimeout(Math.max(1000, Number(process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS)));
       await clickLiveFilter(detailPage);
       const opened = await clickEventInCurrentList(detailPage, game);
@@ -1155,7 +1168,7 @@ async function openGameStatisticsPage(page, game = {}) {
 
     const statsUrl = urlWithHashToken(currentUrl, "tab:statistics");
     if (statsUrl && statsUrl !== currentUrl) {
-      await detailPage.goto(statsUrl, { waitUntil: "domcontentloaded", timeout: Number(process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) }).catch(() => {});
+      await detailPage.goto(statsUrl, { waitUntil: "domcontentloaded", timeout: detailTimeoutMs }).catch(() => {});
       await detailPage.waitForTimeout(Math.max(1200, Number(process.env.SOFASCORE_BROWSER_STATS_TAB_SETTLE_MS || 1800)));
     }
     await clickStatisticsTab(detailPage);
@@ -1325,7 +1338,11 @@ async function attachRealStatistics(page, games = []) {
 async function runSofaScoreBrowserProbe(options = {}) {
   const startedAt = new Date().toISOString();
   const url = options.url || process.env.SOFASCORE_BROWSER_URL || DEFAULT_SOFASCORE_URL;
-  const timeoutMs = Number(options.timeoutMs || process.env.SOFASCORE_BROWSER_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
+  const timeoutMs = boundedTimeout(
+    options.timeoutMs || process.env.SOFASCORE_BROWSER_TIMEOUT_MS,
+    DEFAULT_TIMEOUT_MS,
+    MAX_BROWSER_NAVIGATION_TIMEOUT_MS
+  );
   const settleMs = Number(options.settleMs || process.env.SOFASCORE_BROWSER_SETTLE_MS || DEFAULT_SETTLE_MS);
   const captureDelayMs = Math.max(400, Number(options.captureDelayMs || process.env.SOFASCORE_BROWSER_CAPTURE_DELAY_MS || DEFAULT_CAPTURE_DELAY_MS));
   const maxCaptureSteps = Math.max(10, Number(options.maxCaptureSteps || process.env.SOFASCORE_BROWSER_MAX_CAPTURE_STEPS || DEFAULT_MAX_CAPTURE_STEPS));

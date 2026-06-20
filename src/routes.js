@@ -259,13 +259,18 @@ async function updateSofaScoreCache(store, options = {}) {
   let snapshot;
   store.update((data) => {
     normalizeData(data);
-    snapshot = saveSofaScoreSnapshot(data, store, result, options.userId || null);
+    const hasUsableResult = Boolean(result.ok && result.games?.length);
+    snapshot = hasUsableResult
+      ? saveSofaScoreSnapshot(data, store, result, options.userId || null)
+      : latestSofaScoreSnapshot(data, { onlyOk: true });
+    if (!hasUsableResult) data.settings.sofascoreBrowserLastResult = result;
     audit(data, options.userId || null, "sofascore_browser.cache_updated", "sofascoreSnapshots", null, {
       ok: result.ok,
       url: result.url,
       games: result.games.length,
-      liveGames: snapshot.liveGamesCount,
-      snapshotId: snapshot.id,
+      liveGames: snapshot?.liveGamesCount || 0,
+      snapshotId: snapshot?.id || null,
+      preservedPreviousSnapshot: !hasUsableResult && Boolean(snapshot),
       source: options.source || "manual",
       error: result.error
     }, options.req || null);
@@ -281,8 +286,11 @@ function startSofaScoreAutoMonitor(store, options = {}) {
   const intervalMs = Math.max(120000, Number(options.intervalMs || process.env.SOFASCORE_AUTO_INTERVAL_MS || 120000));
   const startDelayMs = Math.max(10000, Number(options.startDelayMs || process.env.SOFASCORE_AUTO_START_DELAY_MS || 15000));
   let running = false;
+  let stopped = false;
+  let timer = null;
 
   async function run(reason) {
+    if (stopped) return;
     if (running) {
       console.log(`[SofaScore] Monitor automatico ignorou ${reason}: leitura anterior ainda em andamento.`);
       return;
@@ -293,32 +301,36 @@ function startSofaScoreAutoMonitor(store, options = {}) {
     try {
       const { result, snapshot } = await updateSofaScoreCache(store, { source: `auto:${reason}` });
       const status = result.ok ? "ok" : `erro: ${result.error}`;
-      const sampleStatuses = (snapshot.games || [])
+      const sampleStatuses = (snapshot?.games || [])
         .slice(0, 8)
         .map((game) => `${game.homeTeam || "?"} ${game.status || "-"} ${game.statusLabel || ""}`.trim())
         .join(" | ");
-      const statsCount = (snapshot.games || []).filter((game) => game.stats && !game.stats.estimated && !game.stats.unavailable).length;
-      const sampleStats = (snapshot.games || [])
+      const statsCount = (snapshot?.games || []).filter((game) => game.stats && !game.stats.estimated && !game.stats.unavailable).length;
+      const sampleStats = (snapshot?.games || [])
         .slice(0, 5)
         .map((game) => `${game.homeTeam || "?"}:${game.stats?.source || "sem_stats"}${game.stats?.sourceDetail ? `:${game.stats.sourceDetail}` : ""}`)
         .join(" | ");
-      console.log(`[SofaScore] Cache automatico ${status} em ${Math.round((Date.now() - started) / 1000)}s. Jogos ao vivo: ${snapshot.liveGamesCount}/${snapshot.gamesCount}. Estatisticas: ${statsCount}/${snapshot.gamesCount}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}${sampleStats ? ` Stats: ${sampleStats}` : ""}`);
+      console.log(`[SofaScore] Cache automatico ${status} em ${Math.round((Date.now() - started) / 1000)}s. Jogos ao vivo: ${snapshot?.liveGamesCount || 0}/${snapshot?.gamesCount || 0}. Estatisticas: ${statsCount}/${snapshot?.gamesCount || 0}.${sampleStatuses ? ` Status: ${sampleStatuses}` : ""}${sampleStats ? ` Stats: ${sampleStats}` : ""}`);
     } catch (error) {
       console.error(`[SofaScore] Falha no monitor automatico: ${error.message}`);
     } finally {
       running = false;
+      if (!stopped) {
+        const elapsed = Date.now() - started;
+        const nextDelay = Math.max(5000, intervalMs - elapsed);
+        timer = setTimeout(() => run("interval"), nextDelay);
+        timer.unref?.();
+      }
     }
   }
 
-  const firstRun = setTimeout(() => run("startup"), startDelayMs);
-  const timer = setInterval(() => run("interval"), intervalMs);
-  firstRun.unref?.();
+  timer = setTimeout(() => run("startup"), startDelayMs);
   timer.unref?.();
   console.log(`[SofaScore] Monitor automatico ligado a cada ${Math.round(intervalMs / 1000)}s.`);
   return {
     stop: () => {
-      clearTimeout(firstRun);
-      clearInterval(timer);
+      stopped = true;
+      clearTimeout(timer);
     }
   };
 }
