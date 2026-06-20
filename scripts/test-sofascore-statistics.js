@@ -86,8 +86,14 @@ const visual = parseVisualStatisticsLines([
 
 assert.strictEqual(visual.unavailable, false);
 assert.strictEqual(visual.totalShots, 12);
+assert.strictEqual(visual.homeTotalShots, 8);
+assert.strictEqual(visual.awayTotalShots, 4);
 assert.strictEqual(visual.shotsOnTarget, 5);
+assert.strictEqual(visual.homeShotsOnTarget, 4);
+assert.strictEqual(visual.awayShotsOnTarget, 1);
 assert.strictEqual(visual.corners, 7);
+assert.strictEqual(visual.homeCorners, 5);
+assert.strictEqual(visual.awayCorners, 2);
 assert.strictEqual(visual.possessionHome, 62);
 assert.strictEqual(visual.expectedGoals, 1.59);
 assert.strictEqual(visual.expectedGoalsHome, 1.17);

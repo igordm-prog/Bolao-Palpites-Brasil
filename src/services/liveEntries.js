@@ -122,15 +122,16 @@ async function fetchSofaScoreStatistics(baseUrl, eventId) {
             stats.expectedGoalsAway += decimalValue(item.away);
             stats.expectedGoals += decimalValue(item.home) + decimalValue(item.away);
           }
-          if (name.includes("total shots") || name.includes("shots")) {
-            stats.homeTotalShots += home;
-            stats.awayTotalShots += away;
-            stats.totalShots += total;
-          }
           if (name.includes("shots on target")) {
             stats.homeShotsOnTarget += home;
             stats.awayShotsOnTarget += away;
             stats.shotsOnTarget += total;
+            return;
+          }
+          if (name.includes("total shots") || name === "shots") {
+            stats.homeTotalShots += home;
+            stats.awayTotalShots += away;
+            stats.totalShots += total;
           }
           if (name.includes("corner")) {
             stats.homeCorners += home;
@@ -215,13 +216,29 @@ async function fetchFixtureStatistics(baseUrl, fixtureId, apiKey) {
       (teamStats.statistics || []).forEach((item) => {
         const type = normalizeText(item.type);
         const value = numberValue(item.value);
-        if (type === "total shots") stats.totalShots += value;
-        if (type === "shots on goal") stats.shotsOnTarget += value;
-        if (type === "corner kicks") stats.corners += value;
+        const isHome = teamIndex === 0;
+        if (type === "total shots") {
+          stats.totalShots += value;
+          if (isHome) stats.homeTotalShots += value;
+          else stats.awayTotalShots += value;
+        }
+        if (type === "shots on goal") {
+          stats.shotsOnTarget += value;
+          if (isHome) stats.homeShotsOnTarget += value;
+          else stats.awayShotsOnTarget += value;
+        }
+        if (type === "corner kicks") {
+          stats.corners += value;
+          if (isHome) stats.homeCorners += value;
+          else stats.awayCorners += value;
+        }
         if (type === "yellow cards") stats.yellowCards += value;
         if (type === "red cards") stats.redCards += value;
         if (type === "dangerous attacks" || type === "attacks") stats.dangerousAttacks += value;
-        if (type === "ball possession" && teamIndex === 0) stats.possessionHome = value;
+        if (type === "ball possession") {
+          if (isHome) stats.possessionHome = value;
+          else stats.possessionAway = value;
+        }
       });
     });
     return stats;
@@ -249,11 +266,20 @@ function buildDemoMatches() {
     const homeScore = index === 4 ? 1 : 0;
     const awayScore = 0;
     const stats = {
-      totalShots: 4 + index + Math.floor((Date.now() / 20000 + index) % 4),
-      shotsOnTarget: 1 + (index % 3),
-      corners: 2 + (index % 4),
-      dangerousAttacks: 15 + index * 3,
+      totalShots: 8 + index + Math.floor((Date.now() / 20000 + index) % 4),
+      homeTotalShots: 5 + index,
+      awayTotalShots: 3 + Math.floor(index / 2),
+      shotsOnTarget: 3 + (index % 3),
+      homeShotsOnTarget: 2 + (index % 2),
+      awayShotsOnTarget: 1,
+      corners: 4 + (index % 4),
+      homeCorners: 3 + (index % 3),
+      awayCorners: 1 + (index % 2),
       possessionHome: 50 + index * 3,
+      possessionAway: 50 - index * 3,
+      expectedGoals: 0.7 + index * 0.18,
+      expectedGoalsHome: 0.45 + index * 0.15,
+      expectedGoalsAway: 0.25 + index * 0.03,
       yellowCards: index % 2,
       redCards: 0
     };
@@ -300,6 +326,8 @@ function buildMatch(input) {
     startsAt: input.startsAt,
     status: alert ? "Entrada encontrada" : "Ao vivo",
     minute: input.minute,
+    homeScore: input.homeScore,
+    awayScore: input.awayScore,
     scoreboard: `${input.homeScore} x ${input.awayScore}`,
     funnelScore: alert ? 100 : 0,
     classification: alert ? "entrada encontrada" : dados.decisionLog,
@@ -310,6 +338,11 @@ function buildMatch(input) {
     stats,
     statsEstimated: Boolean(stats.estimated || stats.unavailable),
     pressure: dados.pressure,
+    pxg: dados.pxg,
+    pxgSide: dados.pressureSide,
+    homePxg: calcularPXG(dados.possessionHome, dados.homeXg),
+    awayPxg: calcularPXG(dados.possessionAway, dados.awayXg),
+    sideStats: dados.sideStats,
     link: input.link || DEFAULT_SOFASCORE_PUBLIC_URL,
     source: input.source
   };
@@ -319,19 +352,24 @@ function normalizarEstatisticas(jogo = {}) {
   const stats = { ...emptyStats(), ...(jogo.stats || {}) };
   const minute = Number(jogo.minute || 0);
   const period = minute > 45 ? 2 : 1;
-  const appm = calcularAPPM(stats.dangerousAttacks, minute);
-  const cg = calcularCG(stats.totalShots, stats.shotsOnTarget, stats.corners);
   const possessionHome = Number(stats.possessionHome || 50);
   const possessionAway = Number(stats.possessionAway || (possessionHome ? 100 - possessionHome : 50));
   const dominantPossession = Math.max(possessionHome, possessionAway);
-  const xg = Number(stats.expectedGoals || 0);
+  const homeXg = Number(stats.expectedGoalsHome || 0);
+  const awayXg = Number(stats.expectedGoalsAway || 0);
+  const homePxg = calcularPXG(possessionHome, homeXg);
+  const awayPxg = calcularPXG(possessionAway, awayXg);
+  const favoriteSide = inferFavoriteSide(stats, { homePxg, awayPxg });
+  const pressureSide = homePxg.approved ? "home" : awayPxg.approved ? "away" : favoriteSide;
+  const sideStats = statsForSide(stats, pressureSide);
+  const cg = calcularCG(sideStats.totalShots, sideStats.shotsOnTarget, sideStats.corners);
+  const xg = pressureSide === "home" ? homeXg : awayXg;
+  const pxg = pressureSide === "home" ? homePxg : awayPxg;
   const missingReasons = [];
   if (!minute || minute > 120) missingReasons.push("tempo de jogo sem confiabilidade");
   if (stats.estimated || stats.unavailable) missingReasons.push("estatisticas reais indisponiveis");
-  if (!stats.dangerousAttacks) missingReasons.push("ataques perigosos ausentes");
-  if (!stats.totalShots && !stats.corners) missingReasons.push("chances de gol ausentes");
-  if (!xg) missingReasons.push("xG ausente");
-  const favoriteSide = inferFavoriteSide(stats);
+  if (!homeXg && !awayXg) missingReasons.push("xG por equipe ausente");
+  if (!stats.homeTotalShots && !stats.awayTotalShots && !stats.homeCorners && !stats.awayCorners) missingReasons.push("estatisticas por equipe ausentes");
   return {
     id: jogo.id,
     gameId: jogo.id,
@@ -344,27 +382,37 @@ function normalizarEstatisticas(jogo = {}) {
     homeScore: Number(jogo.homeScore || 0),
     awayScore: Number(jogo.awayScore || 0),
     stats,
-    appm,
     cg,
     possessionHome,
     possessionAway,
     dominantPossession,
     xg,
-    corners: Number(stats.corners || 0),
+    homeXg,
+    awayXg,
+    pxg,
+    pxgApproved: Boolean(pxg.approved),
+    pxgSide: pxg.approved ? pressureSide : null,
+    pressureSide,
+    sideStats,
+    corners: Number(sideStats.corners || 0),
     favoriteSide,
     favoriteIsDrawingOrLosing: favoriteSide === "home"
       ? Number(jogo.homeScore || 0) <= Number(jogo.awayScore || 0)
       : Number(jogo.awayScore || 0) <= Number(jogo.homeScore || 0),
-    pressure: dominantPossession >= 60 ? "Favorito pressionando no campo de ataque" : "Monitorando ritmo",
+    pressure: pxg.approved ? `${sideName(pressureSide)} com PXG confirmado` : "Monitorando PXG",
     missingReasons,
     decisionLog: missingReasons.length ? missingReasons.join("; ") : "monitorando"
   };
 }
 
-function calcularAPPM(ataquesPerigosos, minutoAtual) {
-  const minute = Number(minutoAtual || 0);
-  if (!minute) return 0;
-  return Math.round((Number(ataquesPerigosos || 0) / minute) * 100) / 100;
+function calcularPXG(posseBola, xg) {
+  const possession = Number(posseBola || 0);
+  const expectedGoals = Number(xg || 0);
+  return {
+    approved: possession >= 60 && expectedGoals > 1.3,
+    possession,
+    xg: Math.round(expectedGoals * 100) / 100
+  };
 }
 
 function calcularCG(finalizacoes, chutesAoAlvo, escanteios) {
@@ -375,38 +423,32 @@ function calcularCG(finalizacoes, chutesAoAlvo, escanteios) {
 }
 
 function avaliarGolLimite1T(dados, config = {}) {
-  const cfg = { appm: 1, cg: 10, possession: 60, xg: 1, corners: 3, ...config };
+  const cfg = { cg: 10, corners: 3, ...config };
   return evaluateRequiredFunnel(dados, "Gol Limite 1o Tempo", [
     [dados.period === 1, "periodo precisa ser 1o tempo"],
-    [dados.appm >= cfg.appm, "APPM abaixo de 1.00"],
+    [dados.pxgApproved, "PXG nao confirmado"],
     [dados.cg >= cfg.cg, "chances de gol abaixo de 10"],
-    [dados.dominantPossession >= cfg.possession, "posse de bola abaixo de 60%"],
-    [dados.xg >= cfg.xg, "xG abaixo de 1.00"],
     [dados.corners >= cfg.corners, "tendencia de escanteios abaixo de 3"]
   ]);
 }
 
 function avaliarGolLimite2T(dados, config = {}) {
-  const cfg = { appm: 1, cg: 15, possession: 60, xg: 1, corners: 7, ...config };
+  const cfg = { cg: 15, corners: 7, ...config };
   return evaluateRequiredFunnel(dados, "Gol Limite 2o Tempo", [
     [dados.period === 2, "periodo precisa ser 2o tempo"],
-    [dados.appm >= cfg.appm, "APPM abaixo de 1.00"],
+    [dados.pxgApproved, "PXG nao confirmado"],
     [dados.cg >= cfg.cg, "chances de gol abaixo de 15"],
-    [dados.dominantPossession >= cfg.possession, "posse de bola abaixo de 60%"],
-    [dados.xg >= cfg.xg, "xG abaixo de 1.00"],
     [dados.corners >= cfg.corners, "tendencia de escanteios abaixo de 7"]
   ]);
 }
 
 function avaliarCantoLimite(dados, config = {}) {
-  const cfg = { appm: 1, cg1: 10, cg2: 15, possession: 56, xg: 1, ...config };
+  const cfg = { cg1: 10, cg2: 15, ...config };
   const cgOk = dados.period === 1 ? dados.cg > cfg.cg1 : dados.cg > cfg.cg2;
   return evaluateRequiredFunnel(dados, "Canto Limite", [
     [validarJanelaCantoLimite(dados.period, dados.minute), "fora da janela de entrada do Canto Limite"],
-    [dados.appm >= cfg.appm, "APPM abaixo de 1.00"],
+    [dados.pxgApproved, "PXG nao confirmado"],
     [cgOk, "chances de gol abaixo do minimo por periodo"],
-    [dados.xg > cfg.xg, "xG abaixo ou igual a 1.00"],
-    [dados.dominantPossession > cfg.possession, "posse de bola abaixo ou igual a 56%"],
     [dados.favoriteIsDrawingOrLosing, "favorito nao esta empatando ou perdendo"]
   ]);
 }
@@ -430,12 +472,11 @@ function evaluateRequiredFunnel(dados, entrada, rules) {
 }
 
 function montarMotivos(dados) {
+  const side = sideName(dados.pressureSide);
   return [
-    `APPM: ${dados.appm.toFixed(2)}, acima do minimo de 1.00.`,
-    `Chances de gol: ${dados.cg}, acima do minimo exigido.`,
-    `Posse de bola: ${dados.dominantPossession}%, acima do filtro.`,
-    `xG: ${dados.xg.toFixed(2)}, acima do minimo exigido.`,
-    `Tendencia de escanteios dentro do filtro (${dados.corners}).`,
+    `PXG do ${side}: posse ${dados.pxg.possession}% e xG ${dados.pxg.xg.toFixed(2)}, acima do filtro.`,
+    `Chances de gol do ${side}: ${dados.cg}, acima do minimo exigido.`,
+    `Escanteios do ${side}: ${dados.corners}, dentro do filtro.`,
     dados.pressure
   ];
 }
@@ -480,7 +521,32 @@ function registrarLogDeDecisao(dados, resultado) {
   return { gameId: dados.gameId, entrada: resultado.entrada, approved: resultado.approved, rejected: resultado.rejected || [] };
 }
 
-function inferFavoriteSide(stats = {}) {
+function statsForSide(stats = {}, side = "home") {
+  if (side === "away") {
+    return {
+      totalShots: Number(stats.awayTotalShots || 0),
+      shotsOnTarget: Number(stats.awayShotsOnTarget || 0),
+      corners: Number(stats.awayCorners || 0),
+      possession: Number(stats.possessionAway || 0),
+      xg: Number(stats.expectedGoalsAway || 0)
+    };
+  }
+  return {
+    totalShots: Number(stats.homeTotalShots || 0),
+    shotsOnTarget: Number(stats.homeShotsOnTarget || 0),
+    corners: Number(stats.homeCorners || 0),
+    possession: Number(stats.possessionHome || 0),
+    xg: Number(stats.expectedGoalsHome || 0)
+  };
+}
+
+function sideName(side = "home") {
+  return side === "away" ? "visitante" : "mandante";
+}
+
+function inferFavoriteSide(stats = {}, pxg = {}) {
+  if (pxg.homePxg?.approved && !pxg.awayPxg?.approved) return "home";
+  if (pxg.awayPxg?.approved && !pxg.homePxg?.approved) return "away";
   const homePressure =
     Number(stats.possessionHome || 0) +
     Number(stats.expectedGoalsHome || 0) * 20 +
@@ -683,7 +749,7 @@ module.exports = {
   refreshLiveEntries,
   __private: {
     normalizarEstatisticas,
-    calcularAPPM,
+    calcularPXG,
     calcularCG,
     avaliarGolLimite1T,
     avaliarGolLimite2T,

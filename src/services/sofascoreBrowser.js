@@ -417,6 +417,31 @@ function numberNearLabel(lines, labelPatterns) {
   return 0;
 }
 
+function numberPairNearLabel(lines, labelPatterns) {
+  const normalizedLines = lines.map((line) => normalizeLine(line));
+  for (let index = 0; index < normalizedLines.length; index += 1) {
+    const key = normalizeKey(normalizedLines[index]);
+    if (!labelPatterns.some((pattern) => key.includes(pattern))) continue;
+    const pairs = [
+      [normalizedLines[index - 1], normalizedLines[index + 1]],
+      [normalizedLines[index - 2], normalizedLines[index + 2]]
+    ];
+    for (const pair of pairs) {
+      const values = pair
+        .map((value) => onlyNumber(String(value || "").replace("%", "")))
+        .filter((value) => value !== null && value >= 0);
+      if (values.length >= 2) {
+        return {
+          home: Math.round(values[0]),
+          away: Math.round(values[1]),
+          total: Math.round(values[0] + values[1])
+        };
+      }
+    }
+  }
+  return { home: 0, away: 0, total: 0 };
+}
+
 function urlWithHashToken(rawUrl, token) {
   try {
     const url = new URL(rawUrl || DEFAULT_SOFASCORE_URL);
@@ -477,11 +502,14 @@ function sidePercentNearLabel(lines, labelPatterns) {
 }
 
 function parseVisualStatisticsLines(lines = []) {
-  const totalShots = numberNearLabel(lines, ["finalizacoes", "total shots"]);
-  const shotsOnTarget = numberNearLabel(lines, ["finalizacoes no alvo", "finalizacoes no gol", "chutes no alvo", "chutes ao gol", "shots on target"]);
+  const totalShotsPair = numberPairNearLabel(lines, ["finalizacoes", "total shots"]);
+  const shotsOnTargetPair = numberPairNearLabel(lines, ["finalizacoes no alvo", "finalizacoes no gol", "chutes no alvo", "chutes ao gol", "shots on target"]);
+  const cornersPair = numberPairNearLabel(lines, ["escanteios", "corner"]);
+  const totalShots = totalShotsPair.total;
+  const shotsOnTarget = shotsOnTargetPair.total;
   const shotsOffTarget = numberNearLabel(lines, ["finalizacoes para fora", "shots off target"]);
   const blockedShots = numberNearLabel(lines, ["finalizacoes bloqueadas", "blocked shots"]);
-  const corners = numberNearLabel(lines, ["escanteios", "corner"]);
+  const corners = cornersPair.total;
   const dangerousAttacks = numberNearLabel(lines, ["ataques perigosos", "dangerous attacks"]);
   const yellowCards = numberNearLabel(lines, ["cartoes amarelos", "yellow cards"]);
   const redCards = numberNearLabel(lines, ["cartoes vermelhos", "red cards"]);
@@ -494,16 +522,16 @@ function parseVisualStatisticsLines(lines = []) {
   const calculatedTotalShots = totalShots || shotsOnTarget + shotsOffTarget + blockedShots;
   return {
     totalShots: calculatedTotalShots,
-    homeTotalShots: 0,
-    awayTotalShots: 0,
+    homeTotalShots: totalShotsPair.home,
+    awayTotalShots: totalShotsPair.away,
     shotsOnTarget,
-    homeShotsOnTarget: 0,
-    awayShotsOnTarget: 0,
+    homeShotsOnTarget: shotsOnTargetPair.home,
+    awayShotsOnTarget: shotsOnTargetPair.away,
     shotsOffTarget,
     blockedShots,
     corners,
-    homeCorners: 0,
-    awayCorners: 0,
+    homeCorners: cornersPair.home,
+    awayCorners: cornersPair.away,
     dangerousAttacks,
     attacks: 0,
     possessionHome,

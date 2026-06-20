@@ -4,7 +4,7 @@ const { __private } = require("../src/services/liveEntries");
 
 const {
   normalizarEstatisticas,
-  calcularAPPM,
+  calcularPXG,
   calcularCG,
   avaliarGolLimite1T,
   avaliarGolLimite2T,
@@ -13,7 +13,9 @@ const {
   validarJanelaCantoLimite
 } = __private;
 
-assert.strictEqual(calcularAPPM(30, 25), 1.2);
+assert.strictEqual(calcularPXG(62, 1.31).approved, true);
+assert.strictEqual(calcularPXG(59, 1.8).approved, false);
+assert.strictEqual(calcularPXG(65, 1.3).approved, false);
 assert.strictEqual(calcularCG(8, 3, 4), 15);
 assert.strictEqual(validarJanelaCantoLimite(1, 38), true);
 assert.strictEqual(validarJanelaCantoLimite(1, 35), false);
@@ -29,13 +31,18 @@ const firstHalf = normalizarEstatisticas({
   awayScore: 0,
   stats: {
     totalShots: 7,
+    homeTotalShots: 7,
+    awayTotalShots: 0,
     shotsOnTarget: 2,
+    homeShotsOnTarget: 2,
+    awayShotsOnTarget: 0,
     corners: 3,
-    dangerousAttacks: 32,
+    homeCorners: 3,
+    awayCorners: 0,
     possessionHome: 62,
     possessionAway: 38,
-    expectedGoals: 1.15,
-    expectedGoalsHome: 1.15,
+    expectedGoals: 1.35,
+    expectedGoalsHome: 1.35,
     expectedGoalsAway: 0,
     estimated: false,
     unavailable: false
@@ -49,6 +56,7 @@ assert.strictEqual(avaliarGolLimite2T(firstHalf).approved, false);
 const alert = montarMensagemAlertaSemOdd(firstHalf, goal1);
 assert.strictEqual(alert.entrada, "Gol Limite 1o Tempo");
 assert(alert.text.includes("Entrada: Gol Limite 1o Tempo"));
+assert(alert.text.includes("PXG do mandante"));
 assert(!/odd|stake|betano/i.test(alert.text));
 
 const secondHalf = normalizarEstatisticas({
@@ -61,13 +69,18 @@ const secondHalf = normalizarEstatisticas({
   awayScore: 1,
   stats: {
     totalShots: 11,
+    homeTotalShots: 11,
+    awayTotalShots: 0,
     shotsOnTarget: 3,
+    homeShotsOnTarget: 3,
+    awayShotsOnTarget: 0,
     corners: 7,
-    dangerousAttacks: 92,
+    homeCorners: 7,
+    awayCorners: 0,
     possessionHome: 62,
     possessionAway: 38,
-    expectedGoals: 1.05,
-    expectedGoalsHome: 1.05,
+    expectedGoals: 1.35,
+    expectedGoalsHome: 1.35,
     expectedGoalsAway: 0.2,
     estimated: false,
     unavailable: false

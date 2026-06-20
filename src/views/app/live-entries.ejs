@@ -96,9 +96,9 @@
               </div>
             </div>
             <dl class="live-signal-metrics">
-              <div><dt>APPM</dt><dd><%= ((signal.stats.dangerousAttacks || 0) / Math.max(1, signal.minute || 1)).toFixed(2) %></dd></div>
-              <div><dt>CG</dt><dd><%= (signal.stats.totalShots || 0) + (signal.stats.shotsOnTarget || 0) + (signal.stats.corners || 0) %></dd></div>
-              <div><dt>xG</dt><dd><%= Number(signal.stats.expectedGoals || 0).toFixed(2) %></dd></div>
+              <div><dt>PXG</dt><dd><%= signal.pxg?.approved ? "Confirmado" : "Monitorando" %></dd></div>
+              <div><dt>CG</dt><dd><%= signal.sideStats ? ((signal.sideStats.totalShots || 0) + (signal.sideStats.shotsOnTarget || 0) + (signal.sideStats.corners || 0)) : 0 %></dd></div>
+              <div><dt>xG lado</dt><dd><%= Number(signal.sideStats?.xg || 0).toFixed(2) %></dd></div>
             </dl>
             <ul class="live-reasons">
               <% signal.reasons.slice(0, 5).forEach((reason) => { %><li><%= reason %></li><% }) %>
@@ -111,36 +111,77 @@
 
     <section class="table-panel live-matches-panel">
       <h2>Todos os jogos em monitoramento</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Jogo</th>
-            <th>Campeonato</th>
-            <th>Status</th>
-            <th>Placar</th>
-            <th>Estatisticas</th>
-            <th>Decisao</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody data-matches-body>
-          <% if (!liveEntries.matches.length) { %>
-            <tr><td colspan="7">Nenhum jogo ao vivo encontrado agora.</td></tr>
-          <% } %>
-          <% liveEntries.matches.forEach((match) => { %>
-            <% const statsLine = match.statsEstimated ? "Sem estatisticas reais do SofaScore" : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc. | xG ${Number(match.stats.expectedGoals || 0).toFixed(2)}`; %>
-            <tr>
-              <td><strong><%= match.homeTeam %> x <%= match.awayTeam %></strong><br><small><%= match.sofaScoreStatus || `${match.minute}'` %></small></td>
-              <td><%= match.league %></td>
-              <td><span class="badge <%= match.alert ? 'paid' : 'awaiting' %>"><%= match.status %></span></td>
-              <td><%= match.scoreboard %></td>
-              <td><small><%= statsLine %></small></td>
-              <td><strong><%= match.alert?.entrada || match.classification %></strong><br><small><%= match.reasons.slice(0, 2).join(" | ") %></small></td>
-              <td><a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">SofaScore</a></td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
+      <div class="live-match-list" data-matches-body>
+        <% if (!liveEntries.matches.length) { %>
+          <article class="pool-item single live-empty-state">
+            <div>
+              <h3>Nenhum jogo ao vivo encontrado agora.</h3>
+            </div>
+          </article>
+        <% } %>
+        <% liveEntries.matches.forEach((match) => { %>
+          <% const statsRows = [
+            ["Posse de bola", `${match.stats.possessionHome || 0}%`, `${match.stats.possessionAway || 0}%`, match.stats.possessionHome || 0, match.stats.possessionAway || 0],
+            ["Gols esperados (xG)", Number(match.stats.expectedGoalsHome || 0).toFixed(2), Number(match.stats.expectedGoalsAway || 0).toFixed(2), match.stats.expectedGoalsHome || 0, match.stats.expectedGoalsAway || 0],
+            ["Finalizacoes", match.stats.homeTotalShots || 0, match.stats.awayTotalShots || 0, match.stats.homeTotalShots || 0, match.stats.awayTotalShots || 0],
+            ["No alvo", match.stats.homeShotsOnTarget || 0, match.stats.awayShotsOnTarget || 0, match.stats.homeShotsOnTarget || 0, match.stats.awayShotsOnTarget || 0],
+            ["Escanteios", match.stats.homeCorners || 0, match.stats.awayCorners || 0, match.stats.homeCorners || 0, match.stats.awayCorners || 0],
+            ["Cartoes", (match.stats.yellowCards || 0) + (match.stats.redCards || 0), "-", 0, 0]
+          ]; %>
+          <details class="live-match-card">
+            <summary class="live-match-summary">
+              <div>
+                <strong><%= match.homeTeam %> x <%= match.awayTeam %></strong>
+                <small><%= match.league %></small>
+              </div>
+              <div class="live-match-score">
+                <strong><%= match.scoreboard %></strong>
+                <small><%= match.sofaScoreStatus || `${match.minute}'` %></small>
+              </div>
+              <span class="badge <%= match.alert ? 'paid' : 'awaiting' %>"><%= match.status %></span>
+            </summary>
+            <div class="live-match-expanded">
+              <div class="live-expanded-head">
+                <div>
+                  <span><%= match.homeTeam %></span>
+                  <strong><%= match.homeScore ?? "" %></strong>
+                </div>
+                <div>
+                  <small><%= match.statsEstimated ? "Sem estatisticas reais do SofaScore" : "Estatisticas reais do SofaScore" %></small>
+                  <strong><%= match.scoreboard %></strong>
+                </div>
+                <div>
+                  <span><%= match.awayTeam %></span>
+                  <strong><%= match.awayScore ?? "" %></strong>
+                </div>
+              </div>
+              <div class="live-sofascore-stats">
+                <% statsRows.forEach((row) => { %>
+                  <% const total = Number(row[3] || 0) + Number(row[4] || 0); const homePct = total ? Math.round((Number(row[3] || 0) / total) * 100) : 50; const awayPct = total ? 100 - homePct : 50; %>
+                  <div class="live-stat-row">
+                    <strong><%= row[1] %></strong>
+                    <div>
+                      <span><%= row[0] %></span>
+                      <div class="live-stat-bars">
+                        <i style="width:<%= homePct %>%"></i>
+                        <b style="width:<%= awayPct %>%"></b>
+                      </div>
+                    </div>
+                    <strong><%= row[2] %></strong>
+                  </div>
+                <% }) %>
+              </div>
+              <div class="live-decision-panel">
+                <div>
+                  <strong><%= match.alert?.entrada || "Monitorando" %></strong>
+                  <small><%= match.reasons.slice(0, 3).join(" | ") || match.classification %></small>
+                </div>
+                <a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
+              </div>
+            </div>
+          </details>
+        <% }) %>
+      </div>
     </section>
   </div>
 </section>
@@ -170,18 +211,39 @@
       })[char]);
     }
 
-    function statsLine(match) {
-      return match.statsEstimated
-        ? "Sem estatisticas reais do SofaScore"
-        : `${match.stats.totalShots} fin. | ${match.stats.shotsOnTarget} alvo | ${match.stats.corners} esc. | xG ${Number(match.stats.expectedGoals || 0).toFixed(2)}`;
-    }
-
-    function appm(match) {
-      return ((match.stats?.dangerousAttacks || 0) / Math.max(1, match.minute || 1)).toFixed(2);
-    }
-
     function cg(match) {
-      return (match.stats?.totalShots || 0) + (match.stats?.shotsOnTarget || 0) + (match.stats?.corners || 0);
+      return (match.sideStats?.totalShots || 0) + (match.sideStats?.shotsOnTarget || 0) + (match.sideStats?.corners || 0);
+    }
+
+    function statRows(match) {
+      const stats = match.stats || {};
+      return [
+        ["Posse de bola", `${stats.possessionHome || 0}%`, `${stats.possessionAway || 0}%`, stats.possessionHome || 0, stats.possessionAway || 0],
+        ["Gols esperados (xG)", Number(stats.expectedGoalsHome || 0).toFixed(2), Number(stats.expectedGoalsAway || 0).toFixed(2), stats.expectedGoalsHome || 0, stats.expectedGoalsAway || 0],
+        ["Finalizacoes", stats.homeTotalShots || 0, stats.awayTotalShots || 0, stats.homeTotalShots || 0, stats.awayTotalShots || 0],
+        ["No alvo", stats.homeShotsOnTarget || 0, stats.awayShotsOnTarget || 0, stats.homeShotsOnTarget || 0, stats.awayShotsOnTarget || 0],
+        ["Escanteios", stats.homeCorners || 0, stats.awayCorners || 0, stats.homeCorners || 0, stats.awayCorners || 0],
+        ["Cartoes", (stats.yellowCards || 0) + (stats.redCards || 0), "-", 0, 0]
+      ];
+    }
+
+    function statRowHtml(row) {
+      const total = Number(row[3] || 0) + Number(row[4] || 0);
+      const homePct = total ? Math.round((Number(row[3] || 0) / total) * 100) : 50;
+      const awayPct = total ? 100 - homePct : 50;
+      return `
+        <div class="live-stat-row">
+          <strong>${escapeHtml(row[1])}</strong>
+          <div>
+            <span>${escapeHtml(row[0])}</span>
+            <div class="live-stat-bars">
+              <i style="width:${homePct}%"></i>
+              <b style="width:${awayPct}%"></b>
+            </div>
+          </div>
+          <strong>${escapeHtml(row[2])}</strong>
+        </div>
+      `;
     }
 
     function render(data) {
@@ -220,9 +282,9 @@
             </div>
           </div>
           <dl class="live-signal-metrics">
-            <div><dt>APPM</dt><dd>${appm(signal)}</dd></div>
+            <div><dt>PXG</dt><dd>${signal.pxg?.approved ? "Confirmado" : "Monitorando"}</dd></div>
             <div><dt>CG</dt><dd>${cg(signal)}</dd></div>
-            <div><dt>xG</dt><dd>${Number(signal.stats?.expectedGoals || 0).toFixed(2)}</dd></div>
+            <div><dt>xG lado</dt><dd>${Number(signal.sideStats?.xg || 0).toFixed(2)}</dd></div>
           </dl>
           <ul class="live-reasons">${signal.reasons.slice(0, 5).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
           <a class="button full" href="${escapeHtml(signal.link)}" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
@@ -237,16 +299,50 @@
       `;
 
       matchesBody.innerHTML = data.matches.length ? data.matches.map((match) => `
-        <tr>
-          <td><strong>${escapeHtml(match.homeTeam)} x ${escapeHtml(match.awayTeam)}</strong><br><small>${escapeHtml(match.sofaScoreStatus || `${match.minute}'`)}</small></td>
-          <td>${escapeHtml(match.league)}</td>
-          <td><span class="badge ${match.alert ? "paid" : "awaiting"}">${escapeHtml(match.status)}</span></td>
-          <td>${escapeHtml(match.scoreboard)}</td>
-          <td><small>${escapeHtml(statsLine(match))}</small></td>
-          <td><strong>${escapeHtml(match.alert?.entrada || match.classification)}</strong><br><small>${escapeHtml(match.reasons.slice(0, 2).join(" | "))}</small></td>
-          <td><a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">SofaScore</a></td>
-        </tr>
-      `).join("") : `<tr><td colspan="7">Nenhum jogo ao vivo encontrado agora.</td></tr>`;
+        <details class="live-match-card">
+          <summary class="live-match-summary">
+            <div>
+              <strong>${escapeHtml(match.homeTeam)} x ${escapeHtml(match.awayTeam)}</strong>
+              <small>${escapeHtml(match.league)}</small>
+            </div>
+            <div class="live-match-score">
+              <strong>${escapeHtml(match.scoreboard)}</strong>
+              <small>${escapeHtml(match.sofaScoreStatus || `${match.minute}'`)}</small>
+            </div>
+            <span class="badge ${match.alert ? "paid" : "awaiting"}">${escapeHtml(match.status)}</span>
+          </summary>
+          <div class="live-match-expanded">
+            <div class="live-expanded-head">
+              <div>
+                <span>${escapeHtml(match.homeTeam)}</span>
+                <strong>${escapeHtml(String(match.homeScore ?? ""))}</strong>
+              </div>
+              <div>
+                <small>${match.statsEstimated ? "Sem estatisticas reais do SofaScore" : "Estatisticas reais do SofaScore"}</small>
+                <strong>${escapeHtml(match.scoreboard)}</strong>
+              </div>
+              <div>
+                <span>${escapeHtml(match.awayTeam)}</span>
+                <strong>${escapeHtml(String(match.awayScore ?? ""))}</strong>
+              </div>
+            </div>
+            <div class="live-sofascore-stats">
+              ${statRows(match).map(statRowHtml).join("")}
+            </div>
+            <div class="live-decision-panel">
+              <div>
+                <strong>${escapeHtml(match.alert?.entrada || "Monitorando")}</strong>
+                <small>${escapeHtml(match.reasons.slice(0, 3).join(" | ") || match.classification)}</small>
+              </div>
+              <a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
+            </div>
+          </div>
+        </details>
+      `).join("") : `
+        <article class="pool-item single live-empty-state">
+          <div><h3>Nenhum jogo ao vivo encontrado agora.</h3></div>
+        </article>
+      `;
     }
 
     async function load(force = false) {
