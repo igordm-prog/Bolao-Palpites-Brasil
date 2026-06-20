@@ -409,7 +409,7 @@ function calcularPXG(posseBola, xg) {
   const possession = Number(posseBola || 0);
   const expectedGoals = Number(xg || 0);
   return {
-    approved: possession >= 60 && expectedGoals > 1.3,
+    approved: possession >= 60 && expectedGoals >= 1,
     possession,
     xg: Math.round(expectedGoals * 100) / 100
   };

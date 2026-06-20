@@ -13,9 +13,10 @@ const {
   validarJanelaCantoLimite
 } = __private;
 
+assert.strictEqual(calcularPXG(60, 1).approved, true);
 assert.strictEqual(calcularPXG(62, 1.31).approved, true);
 assert.strictEqual(calcularPXG(59, 1.8).approved, false);
-assert.strictEqual(calcularPXG(65, 1.3).approved, false);
+assert.strictEqual(calcularPXG(65, 0.99).approved, false);
 assert.strictEqual(calcularCG(8, 3, 4), 15);
 assert.strictEqual(validarJanelaCantoLimite(1, 38), true);
 assert.strictEqual(validarJanelaCantoLimite(1, 35), false);
