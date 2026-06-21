@@ -85,9 +85,15 @@ async function fetchSofaScoreLiveMatches() {
 async function buildSofaScoreMatch(baseUrl, event) {
   const eventId = event.id;
   const stats = eventId ? await fetchSofaScoreStatistics(baseUrl, eventId) : emptyStats();
-  const minute = Number(event.time?.currentPeriodStartTimestamp
+  const statusMinute = Number(String(event.statusTime?.prefix || event.statusTime?.current || "").replace(/\D/g, ""));
+  const description = String(event.status?.description || event.status?.type || "");
+  const periodOffset = /extra|overtime|aet|extra time/i.test(description)
+    ? 90
+    : /2nd|second half|2h|segundo tempo/i.test(description) ? 45 : 0;
+  const elapsedPeriod = event.time?.currentPeriodStartTimestamp
     ? Math.max(1, Math.floor((Date.now() / 1000 - Number(event.time.currentPeriodStartTimestamp)) / 60))
-    : event.statusTime?.prefix ? Number(String(event.statusTime.prefix).replace(/\D/g, "")) : 0);
+    : 0;
+  const minute = statusMinute || (elapsedPeriod ? periodOffset + elapsedPeriod : 0);
   const homeScore = Number(event.homeScore?.current || 0);
   const awayScore = Number(event.awayScore?.current || 0);
 

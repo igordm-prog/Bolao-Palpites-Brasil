@@ -296,7 +296,7 @@ function startSofaScoreAutoMonitor(store, options = {}) {
     console.log("[SofaScore] Monitor automatico desativado por SOFASCORE_AUTO_MONITOR=false.");
     return { stop: () => {} };
   }
-  const intervalMs = Math.max(120000, Number(options.intervalMs || process.env.SOFASCORE_AUTO_INTERVAL_MS || 120000));
+  const intervalMs = Math.max(60000, Number(options.intervalMs || process.env.SOFASCORE_AUTO_INTERVAL_MS || 60000));
   const startDelayMs = Math.max(10000, Number(options.startDelayMs || process.env.SOFASCORE_AUTO_START_DELAY_MS || 15000));
   let running = false;
   let statisticsRunning = false;

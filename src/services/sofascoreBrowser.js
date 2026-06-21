@@ -758,6 +758,38 @@ function cleanValue(value = "") {
   return String(value).replace(/\s+/g, " ").trim();
 }
 
+function sofaScorePeriodOffset(event = {}) {
+  const status = cleanValue([
+    event.status?.description,
+    event.status?.type,
+    event.status?.period,
+    event.period
+  ].filter(Boolean).join(" "));
+  if (/extra|overtime|aet|extra time/i.test(status)) return 90;
+  if (/2nd|second half|2h|segundo tempo/i.test(status)) return 45;
+  return 0;
+}
+
+function minuteFromSofaScoreEvent(event = {}, nowSeconds = Date.now() / 1000) {
+  const statusTime = cleanValue(event.statusTime?.prefix || event.statusTime?.current || "");
+  if (isMinuteStatus(statusTime, { allowPlain: true })) {
+    return minuteValue(statusTime, { allowPlain: true });
+  }
+  const periodStart = Number(event.time?.currentPeriodStartTimestamp || 0);
+  if (!periodStart) return 0;
+  const elapsed = Math.max(1, Math.floor((Number(nowSeconds) - periodStart) / 60));
+  const minute = sofaScorePeriodOffset(event) + elapsed;
+  return minute > 0 && minute <= 130 ? minute : 0;
+}
+
+function formatSofaScoreMinute(minute, event = {}) {
+  const value = Number(minute || 0);
+  const offset = sofaScorePeriodOffset(event);
+  if (offset === 45 && value > 90) return `90+${value - 90}'`;
+  if (offset === 0 && value > 45) return `45+${value - 45}'`;
+  return value ? `${value}'` : "-";
+}
+
 function sofaScoreEventHref(event = {}) {
   const slug = cleanValue(event.slug || "");
   if (!slug) return null;
@@ -773,12 +805,9 @@ function statusFromSofaScoreEvent(event) {
   if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
   if (/finished|ended|after/i.test(description)) return "FT";
   if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
-  if (isMinuteStatus(statusTime, { allowPlain: true })) return `${statusTime.replace(/[^\d+]/g, "")}'`;
-  const start = Number(event.time?.currentPeriodStartTimestamp || 0);
-  if (start > 0) {
-    const minute = Math.floor((Date.now() / 1000 - start) / 60);
-    if (minute > 0 && minute <= 130) return `${minute}'`;
-  }
+  if (statusTime.includes("+")) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+  const minute = minuteFromSofaScoreEvent(event);
+  if (minute) return formatSofaScoreMinute(minute, event);
   if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return "Ao vivo";
   return description || "-";
 }
@@ -869,11 +898,26 @@ async function fetchLiveEventsFromPage(page) {
       if (/half.?time|interval|intervalo|break/i.test(description)) return "HT";
       if (/finished|ended|after/i.test(description)) return "FT";
       if (/notstarted|scheduled|postponed|canceled|cancelled/i.test(description)) return "-";
-      if (isMinute(statusTime)) return `${statusTime.replace(/[^\d+]/g, "")}'`;
+      if (isMinute(statusTime)) {
+        const rawMinute = statusTime.replace(/[^\d+]/g, "");
+        if (rawMinute.includes("+")) return `${rawMinute}'`;
+        const value = Number(rawMinute || 0);
+        if (/2nd|second half|2h|segundo tempo/i.test(description) && value > 90) return `90+${value - 90}'`;
+        if (/1st|first half|1h|primeiro tempo/i.test(description) && value > 45) return `45+${value - 45}'`;
+        return `${value}'`;
+      }
       const start = Number(event.time?.currentPeriodStartTimestamp || 0);
       if (start > 0) {
-        const minute = Math.floor((Date.now() / 1000 - start) / 60);
-        if (minute > 0 && minute <= 130) return `${minute}'`;
+        const period = clean([event.status?.description, event.status?.type, event.status?.period, event.period].filter(Boolean).join(" "));
+        const offset = /extra|overtime|aet|extra time/i.test(period)
+          ? 90
+          : /2nd|second half|2h|segundo tempo/i.test(period) ? 45 : 0;
+        const minute = offset + Math.max(1, Math.floor((Date.now() / 1000 - start) / 60));
+        if (minute > 0 && minute <= 130) {
+          if (offset === 45 && minute > 90) return `90+${minute - 90}'`;
+          if (offset === 0 && minute > 45) return `45+${minute - 45}'`;
+          return `${minute}'`;
+        }
       }
       if (/inprogress|live|ao vivo|1st|2nd|first half|second half|1h|2h/i.test(description)) return "Ao vivo";
       return description || "-";
@@ -1703,6 +1747,8 @@ module.exports = {
   runSofaScoreStatisticsProbe,
   __private: {
     collectStatisticsPanelLines,
+    formatSofaScoreMinute,
+    minuteFromSofaScoreEvent,
     openGameStatisticsPage,
     parseSofaScoreStatistics,
     parseVisualStatisticsLines

@@ -1,6 +1,28 @@
 const assert = require("assert");
 
 const { dashboardFromSofaScoreSnapshot } = require("../src/services/liveEntries");
+const { __private: sofaScorePrivate } = require("../src/services/sofascoreBrowser");
+
+const nowSeconds = 2_000_000;
+assert.strictEqual(sofaScorePrivate.minuteFromSofaScoreEvent({
+  status: { description: "1st half" },
+  time: { currentPeriodStartTimestamp: nowSeconds - 18 * 60 }
+}, nowSeconds), 18);
+assert.strictEqual(sofaScorePrivate.minuteFromSofaScoreEvent({
+  status: { description: "2nd half" },
+  time: { currentPeriodStartTimestamp: nowSeconds - 18 * 60 }
+}, nowSeconds), 63);
+assert.strictEqual(sofaScorePrivate.minuteFromSofaScoreEvent({
+  status: { description: "2nd half" },
+  statusTime: { prefix: "71" },
+  time: { currentPeriodStartTimestamp: nowSeconds - 26 * 60 }
+}, nowSeconds), 71);
+assert.strictEqual(sofaScorePrivate.formatSofaScoreMinute(63, {
+  status: { description: "2nd half" }
+}), "63'");
+assert.strictEqual(sofaScorePrivate.formatSofaScoreMinute(97, {
+  status: { description: "2nd half" }
+}), "90+7'");
 
 const snapshot = {
   ok: true,
