@@ -1388,7 +1388,7 @@ function rememberStats(eventId, stats) {
   statsMemory.set(key, { stats: { ...stats }, savedAt: Date.now() });
 }
 
-function rememberedStats(eventId) {
+function statsMemoryItem(eventId) {
   const key = String(eventId || "").trim();
   if (!key) return null;
   const item = statsMemory.get(key);
@@ -1398,19 +1398,45 @@ function rememberedStats(eventId) {
     statsMemory.delete(key);
     return null;
   }
+  return item;
+}
+
+function rememberedStats(eventId) {
+  const item = statsMemoryItem(eventId);
+  if (!item) return null;
   return { ...item.stats, sourceDetail: `${item.stats.sourceDetail || item.stats.source || "stats"}:cache` };
+}
+
+function hasFreshStats(eventId) {
+  const item = statsMemoryItem(eventId);
+  if (!item) return false;
+  const refreshMs = Math.max(15000, Number(process.env.SOFASCORE_BROWSER_STATS_REFRESH_MS || 60000));
+  return Date.now() - item.savedAt < refreshMs;
 }
 
 function visualStatsSelection(games = [], maxVisualStats = 0) {
   if (!maxVisualStats || !games.length) return new Set();
-  const candidates = games.filter((game) => game.eventId && !rememberedStats(game.eventId));
-  if (!candidates.length) return new Set();
+  const activeGames = games.filter((game) => game.eventId);
+  const staleGames = activeGames
+    .map((game) => ({ game, item: statsMemoryItem(game.eventId) }))
+    .filter(({ item, game }) => item && !hasFreshStats(game.eventId))
+    .sort((a, b) => a.item.savedAt - b.item.savedAt)
+    .map(({ game }) => game);
+  const emptyGames = activeGames.filter((game) => !statsMemoryItem(game.eventId));
+  if (!staleGames.length && !emptyGames.length) return new Set();
+
   const selected = new Set();
-  for (let offset = 0; offset < Math.min(maxVisualStats, candidates.length); offset += 1) {
-    const game = candidates[(visualStatsCursor + offset) % candidates.length];
+  const staleSlots = emptyGames.length ? Math.min(staleGames.length, Math.ceil(maxVisualStats / 2)) : Math.min(staleGames.length, maxVisualStats);
+  staleGames.slice(0, staleSlots).forEach((game) => selected.add(String(game.eventId)));
+
+  const remainingSlots = maxVisualStats - selected.size;
+  for (let offset = 0; offset < Math.min(remainingSlots, emptyGames.length); offset += 1) {
+    const game = emptyGames[(visualStatsCursor + offset) % emptyGames.length];
     selected.add(String(game.eventId));
   }
-  visualStatsCursor = (visualStatsCursor + Math.min(maxVisualStats, candidates.length)) % candidates.length;
+  if (emptyGames.length) {
+    visualStatsCursor = (visualStatsCursor + Math.min(remainingSlots, emptyGames.length)) % emptyGames.length;
+  }
   return selected;
 }
 
@@ -1435,15 +1461,15 @@ async function attachRealStatistics(page, games = [], options = {}) {
     let details = null;
     const eventId = String(game.eventId || "");
     let stats = statsByEventId.get(eventId) || emptyStats();
-    if (stats.unavailable) stats = rememberedStats(eventId) || stats;
-    if (!stats.unavailable) rememberStats(eventId, stats);
-    if (stats.unavailable && visualStatsEventIds.has(eventId)) {
+    const shouldRefreshVisually = stats.unavailable && visualStatsEventIds.has(eventId);
+    if (stats.unavailable && shouldRefreshVisually) {
       details = await fetchGameDetailsFromPage(page, game.eventId);
       const visualStats = await fetchGameStatisticsVisually(page, { ...game, ...(details || {}) });
       if (!visualStats.unavailable) stats = visualStats;
       if (visualStats.unavailable && visualStats.sourceDetail) stats = visualStats;
-      if (!stats.unavailable) rememberStats(eventId, stats);
     }
+    if (stats.unavailable) stats = rememberedStats(eventId) || stats;
+    if (!stats.unavailable) rememberStats(eventId, stats);
     const status = chooseBestLiveStatus(game, details);
     const minute = minuteFromStatus(status) || Number(game.minute || details?.minute || 0);
     enriched.push({

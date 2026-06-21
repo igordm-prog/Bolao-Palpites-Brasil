@@ -310,7 +310,7 @@ function startSofaScoreAutoMonitor(store, options = {}) {
     try {
       const result = await runSofaScoreStatisticsProbe(games, {
         maxStats: Number(process.env.SOFASCORE_AUTO_MAX_STATS_FETCH || 40),
-        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || 1)
+        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || 5)
       });
       if (!result.ok || !result.games.length) {
         console.log(`[SofaScore] Estatisticas em segundo plano indisponiveis: ${result.error || "sem dados"}.`);
