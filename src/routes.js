@@ -354,22 +354,23 @@ function startSofaScoreAutoMonitor(store, options = {}) {
     try {
       const result = await runSofaScoreStatisticsProbe(selectedGames, {
         maxStats: Number(process.env.SOFASCORE_AUTO_MAX_STATS_FETCH || selectedGames.length),
-        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || selectedGames.length)
+        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || selectedGames.length),
+        forceVisualStats: true
       });
       if (!result.ok || !result.games.length) {
         console.log(`[SofaScore] Estatisticas em segundo plano indisponiveis: ${result.error || "sem dados"}.`);
         return;
       }
+      const statsByEvent = new Map(
+        result.games
+          .filter((game) => game.eventId && game.stats && !game.stats.unavailable)
+          .map((game) => [String(game.eventId), game.stats])
+      );
       let mergedCount = 0;
       store.update((data) => {
         normalizeData(data);
         const latest = latestSofaScoreSnapshot(data, { onlyOk: true });
         if (!latest) return;
-        const statsByEvent = new Map(
-          result.games
-            .filter((game) => game.eventId && game.stats && !game.stats.unavailable)
-            .map((game) => [String(game.eventId), game.stats])
-        );
         latest.games.forEach((game) => {
           const stats = statsByEvent.get(String(game.eventId || ""));
           if (!stats) return;
@@ -379,6 +380,12 @@ function startSofaScoreAutoMonitor(store, options = {}) {
         latest.statsUpdatedAt = todayIso();
       });
       console.log(`[SofaScore] Estatisticas atualizadas em segundo plano: ${mergedCount}/${selectedGames.length} jogos selecionados em ${Math.round((Date.now() - started) / 1000)}s.`);
+      const failedStats = result.games
+        .filter((game) => game.eventId && !statsByEvent.has(String(game.eventId)))
+        .slice(0, 8)
+        .map((game) => `${game.homeTeam || "?"}:${game.stats?.sourceDetail || game.stats?.source || "sem_stats"}`)
+        .join(" | ");
+      if (failedStats) console.log(`[SofaScore] Estatisticas nao capturadas: ${failedStats}`);
     } catch (error) {
       console.error(`[SofaScore] Falha ao atualizar estatisticas em segundo plano: ${error.message}`);
     } finally {

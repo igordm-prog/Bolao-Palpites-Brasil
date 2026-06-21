@@ -614,12 +614,55 @@ function gameKey(game = {}, fallback = "") {
   return game.eventId || compactGameKey(game.homeTeam, game.awayTeam, game.time || game.status || fallback);
 }
 
+function customIdFromSofaScoreHref(raw = "") {
+  try {
+    const url = new URL(raw);
+    const marker = "/football/match/";
+    const index = url.pathname.indexOf(marker);
+    if (index < 0) return null;
+    const rest = url.pathname.slice(index + marker.length).split("/").filter(Boolean);
+    return rest.length >= 2 ? rest[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+function hrefHasSofaScoreCustomId(raw = "") {
+  return Boolean(customIdFromSofaScoreHref(raw));
+}
+
+function preferredSofaScoreHref(current = {}, next = {}) {
+  const currentHref = String(current.href || "").trim();
+  const nextHref = String(next.href || "").trim();
+  if (hrefHasSofaScoreCustomId(nextHref)) return nextHref;
+  if (hrefHasSofaScoreCustomId(currentHref)) return currentHref;
+  return nextHref || currentHref || null;
+}
+
+function mergeSofaScoreGame(current = {}, next = {}, options = {}) {
+  const preferCurrentData = Boolean(options.preferCurrentData);
+  const href = preferredSofaScoreHref(current, next);
+  const customId = next.customId || current.customId || customIdFromSofaScoreHref(href) || null;
+  const merged = preferCurrentData ? { ...next, ...current } : { ...current, ...next };
+  return {
+    ...merged,
+    href,
+    customId,
+    rawText: current.rawText || next.rawText || null,
+    rawLines: current.rawLines?.length ? current.rawLines : next.rawLines || []
+  };
+}
+
 function detailUrlForGame(game = {}) {
   const raw = String(game.href || "").trim();
   if (!raw) return null;
   try {
     const url = new URL(raw);
     if (!/(^|\.)sofascore\.com$/i.test(url.hostname)) return null;
+    const customId = String(game.customId || customIdFromSofaScoreHref(raw) || "").trim();
+    if (customId && !url.pathname.includes(`/${customId}`) && /\/football\/match\//i.test(url.pathname)) {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/${customId}`;
+    }
     const eventId = String(game.eventId || "").trim();
     if (eventId && !String(url.hash || "").includes(`id:${eventId}`)) {
       url.hash = `id:${eventId}`;
@@ -641,7 +684,7 @@ function enrichGames(games = []) {
       return {
         id: compactGameKey(game.homeTeam, game.awayTeam, game.eventId || index + 1),
         eventId: game.eventId || null,
-        customId: game.customId || null,
+        customId: game.customId || customIdFromSofaScoreHref(game.href) || null,
         competition: game.competition || game.league || "SofaScore",
         group: game.group || null,
         time: game.time || null,
@@ -683,24 +726,14 @@ function mergeProbePayloads(payloads = []) {
       const key = gameKey(game, gamesByKey.size + 1);
       const current = gamesByKey.get(key) || {};
       if (hasLiveStatus(current) && !hasLiveStatus(game)) {
-        gamesByKey.set(key, {
-          ...game,
-          ...current,
-          rawText: current.rawText || game.rawText || null,
-          rawLines: current.rawLines?.length ? current.rawLines : game.rawLines || []
-        });
+        gamesByKey.set(key, mergeSofaScoreGame(current, game, { preferCurrentData: true }));
         return;
       }
       if (isApiSource(current.source) && !isApiSource(game.source)) {
-        gamesByKey.set(key, {
-          ...game,
-          ...current,
-          rawText: current.rawText || game.rawText || null,
-          rawLines: current.rawLines?.length ? current.rawLines : game.rawLines || []
-        });
+        gamesByKey.set(key, mergeSofaScoreGame(current, game, { preferCurrentData: true }));
         return;
       }
-      gamesByKey.set(key, { ...current, ...game });
+      gamesByKey.set(key, mergeSofaScoreGame(current, game));
     });
   });
 
@@ -1447,7 +1480,10 @@ async function attachRealStatistics(page, games = [], options = {}) {
   ));
   const delayMs = Math.max(0, Number(options.delayMs ?? process.env.SOFASCORE_BROWSER_STATS_DELAY_MS ?? 75));
   const statsCandidates = games.slice(0, maxStats);
-  const visualStatsEventIds = visualStatsSelection(statsCandidates, maxVisualStats);
+  const forceVisualStats = Boolean(options.forceVisualStats);
+  const visualStatsEventIds = forceVisualStats
+    ? new Set(statsCandidates.map((game) => String(game.eventId || "")).filter(Boolean))
+    : visualStatsSelection(statsCandidates, maxVisualStats);
   const statsByEventId = await fetchManyGameStatisticsFromPage(
     page,
     statsCandidates.map((game) => game.eventId)
@@ -1758,6 +1794,7 @@ async function runSofaScoreStatisticsProbe(games = [], options = {}) {
     const enriched = await attachRealStatistics(page, selectedGames, {
       maxStats: options.maxStats || 40,
       maxVisualStats: options.maxVisualStats ?? 2,
+      forceVisualStats: options.forceVisualStats,
       delayMs: options.delayMs ?? 50
     });
     await session.close();
