@@ -56,6 +56,11 @@
         <strong data-stat-with-stats><%= liveEntries.stats.withStats || 0 %></strong>
         <small>dados reais disponiveis</small>
       </article>
+      <article>
+        <span>Selecionados</span>
+        <strong data-stat-monitored><%= liveEntries.stats.monitored || liveEntries.monitoredCount || 0 %></strong>
+        <small>captura profunda ativa</small>
+      </article>
     </div>
 
     <section class="account-section">
@@ -174,9 +179,23 @@
               <div class="live-decision-panel">
                 <div>
                   <strong><%= match.alert?.entrada || "Monitorando" %></strong>
-                  <small><%= match.reasons.slice(0, 3).join(" | ") || match.classification %></small>
+                  <small><%= match.statsMonitoring ? "Estatisticas reais sendo recapturadas a cada ciclo." : "Selecione o jogo para capturar estatisticas reais." %></small>
                 </div>
-                <a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
+                <div class="live-monitor-actions">
+                  <% if (liveEntries.canManageMonitoring && match.eventId) { %>
+                    <button
+                      class="button small <%= match.statsMonitoring ? 'secondary' : '' %>"
+                      type="button"
+                      data-monitor-stats
+                      data-event-id="<%= match.eventId %>"
+                      data-active="<%= match.statsMonitoring ? 'true' : 'false' %>">
+                      <%= match.statsMonitoring ? "Parar estatisticas" : "Monitorar estatisticas" %>
+                    </button>
+                  <% } else if (match.statsMonitoring) { %>
+                    <span class="badge paid">Monitorado</span>
+                  <% } %>
+                  <a class="button small secondary" href="<%= match.link %>" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
+                </div>
               </div>
             </div>
           </details>
@@ -200,6 +219,7 @@
     const statMatches = root.querySelector("[data-stat-matches]");
     const statSignals = root.querySelector("[data-stat-signals]");
     const statWithStats = root.querySelector("[data-stat-with-stats]");
+    const statMonitored = root.querySelector("[data-stat-monitored]");
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -246,12 +266,31 @@
       `;
     }
 
+    function monitorActionHtml(match, data) {
+      if (data.canManageMonitoring && match.eventId) {
+        const active = Boolean(match.statsMonitoring);
+        return `
+          <button
+            class="button small ${active ? "secondary" : ""}"
+            type="button"
+            data-monitor-stats
+            data-event-id="${escapeHtml(match.eventId)}"
+            data-active="${active ? "true" : "false"}">
+            ${active ? "Parar estatisticas" : "Monitorar estatisticas"}
+          </button>
+        `;
+      }
+      if (match.statsMonitoring) return `<span class="badge paid">Monitorado</span>`;
+      return "";
+    }
+
     function render(data) {
       providerLabel.textContent = data.providerLabel || "Demonstracao";
       lastUpdate.textContent = data.updatedAt ? `Atualizado em ${new Date(data.updatedAt).toLocaleString("pt-BR")}` : "Aguardando primeira leitura";
       statMatches.textContent = data.stats.matches;
       statSignals.textContent = data.stats.signals;
       statWithStats.textContent = data.stats.withStats || 0;
+      statMonitored.textContent = data.stats.monitored || data.monitoredCount || 0;
 
       if (data.error) {
         errorBox.hidden = false;
@@ -332,9 +371,12 @@
             <div class="live-decision-panel">
               <div>
                 <strong>${escapeHtml(match.alert?.entrada || "Monitorando")}</strong>
-                <small>${escapeHtml(match.reasons.slice(0, 3).join(" | ") || match.classification)}</small>
+                <small>${escapeHtml(match.statsMonitoring ? "Estatisticas reais sendo recapturadas a cada ciclo." : "Selecione o jogo para capturar estatisticas reais.")}</small>
               </div>
-              <a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
+              <div class="live-monitor-actions">
+                ${monitorActionHtml(match, data)}
+                <a class="button small secondary" href="${escapeHtml(match.link)}" target="_blank" rel="noreferrer">Abrir no SofaScore</a>
+              </div>
             </div>
           </div>
         </details>
@@ -358,6 +400,27 @@
         await load(true);
       } finally {
         refreshButton.disabled = false;
+      }
+    });
+
+    matchesBody.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-monitor-stats]");
+      if (!button) return;
+      event.preventDefault();
+      button.disabled = true;
+      try {
+        const response = await fetch("/app/entradas-ao-vivo/monitorar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: button.dataset.eventId,
+            action: button.dataset.active === "true" ? "remove" : "add"
+          })
+        });
+        if (!response.ok) throw new Error("Nao foi possivel alterar o monitoramento.");
+        render(await response.json());
+      } finally {
+        button.disabled = false;
       }
     });
 

@@ -160,6 +160,9 @@ function normalizeData(data) {
   }
   data.settings.withdrawalMinimum = 20;
   data.settings.sofascoreBrowserLastResult ||= null;
+  data.settings.sofascoreMonitoredEventIds = Array.from(new Set(
+    (data.settings.sofascoreMonitoredEventIds || []).map((id) => String(id)).filter(Boolean)
+  )).slice(0, 50);
   data.payments ||= [];
   data.participations ||= [];
   data.sofascoreSnapshots ||= [];
@@ -189,6 +192,33 @@ function latestSofaScoreSnapshot(data, options = {}) {
     .sort((a, b) => new Date(b.finishedAt || b.createdAt).getTime() - new Date(a.finishedAt || a.createdAt).getTime())[0] || null;
 }
 
+function isAdminRole(user) {
+  return Boolean(user && ["admin", "super_admin"].includes(user.role));
+}
+
+function monitoredSofaScoreEventIds(data) {
+  return new Set((data.settings?.sofascoreMonitoredEventIds || []).map((id) => String(id)).filter(Boolean));
+}
+
+function decorateLiveEntriesDashboard(liveEntries, data, user) {
+  if (!liveEntries) return liveEntries;
+  const monitoredIds = monitoredSofaScoreEventIds(data);
+  liveEntries.canManageMonitoring = isAdminRole(user);
+  liveEntries.monitoredCount = monitoredIds.size;
+  liveEntries.monitoredEventIds = Array.from(monitoredIds);
+  liveEntries.matches = (liveEntries.matches || []).map((match) => ({
+    ...match,
+    statsMonitoring: monitoredIds.has(String(match.eventId || ""))
+  }));
+  liveEntries.signals = (liveEntries.signals || []).map((signal) => ({
+    ...signal,
+    statsMonitoring: monitoredIds.has(String(signal.eventId || ""))
+  }));
+  liveEntries.stats ||= {};
+  liveEntries.stats.monitored = monitoredIds.size;
+  return liveEntries;
+}
+
 function normalizeSofaScoreBrowserUrl(value) {
   const raw = String(value || process.env.SOFASCORE_BROWSER_URL || "https://www.sofascore.com/pt/futebol/").trim();
   try {
@@ -203,9 +233,10 @@ function normalizeSofaScoreBrowserUrl(value) {
 
 function saveSofaScoreSnapshot(data, store, result, userId) {
   const previousSnapshot = latestSofaScoreSnapshot(data, { onlyOk: true });
+  const monitoredIds = monitoredSofaScoreEventIds(data);
   const previousStats = new Map(
     (previousSnapshot?.games || [])
-      .filter((game) => game.eventId && game.stats && !game.stats.unavailable)
+      .filter((game) => monitoredIds.has(String(game.eventId || "")) && game.stats && !game.stats.unavailable)
       .map((game) => [String(game.eventId), game.stats])
   );
   const games = (result.games || []).map((game, index) => ({
@@ -225,9 +256,10 @@ function saveSofaScoreSnapshot(data, store, result, userId) {
     awayScore: game.awayScore,
     score: game.score || null,
     href: game.href || null,
-    stats: game.stats && !game.stats.unavailable
-      ? game.stats
-      : previousStats.get(String(game.eventId || "")) || game.stats || null,
+    stats: monitoredIds.has(String(game.eventId || ""))
+      ? (game.stats && !game.stats.unavailable ? game.stats : previousStats.get(String(game.eventId || "")) || game.stats || null)
+      : null,
+    statsMonitoring: monitoredIds.has(String(game.eventId || "")),
     rawText: game.rawText || null,
     rawLines: game.rawLines || [],
     capturedAt: result.finishedAt
@@ -305,12 +337,24 @@ function startSofaScoreAutoMonitor(store, options = {}) {
 
   async function updateStatistics(games) {
     if (statisticsRunning || stopped || !games?.length) return;
+    const data = store.read();
+    normalizeData(data);
+    const monitoredIds = monitoredSofaScoreEventIds(data);
+    if (!monitoredIds.size) {
+      console.log("[SofaScore] Estatisticas em segundo plano pausadas: nenhum jogo selecionado.");
+      return;
+    }
+    const selectedGames = games.filter((game) => monitoredIds.has(String(game.eventId || "")));
+    if (!selectedGames.length) {
+      console.log("[SofaScore] Estatisticas em segundo plano pausadas: jogos selecionados nao estao ao vivo.");
+      return;
+    }
     statisticsRunning = true;
     const started = Date.now();
     try {
-      const result = await runSofaScoreStatisticsProbe(games, {
-        maxStats: Number(process.env.SOFASCORE_AUTO_MAX_STATS_FETCH || 40),
-        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || 5)
+      const result = await runSofaScoreStatisticsProbe(selectedGames, {
+        maxStats: Number(process.env.SOFASCORE_AUTO_MAX_STATS_FETCH || selectedGames.length),
+        maxVisualStats: Number(process.env.SOFASCORE_AUTO_MAX_VISUAL_STATS_FETCH || selectedGames.length)
       });
       if (!result.ok || !result.games.length) {
         console.log(`[SofaScore] Estatisticas em segundo plano indisponiveis: ${result.error || "sem dados"}.`);
@@ -334,7 +378,7 @@ function startSofaScoreAutoMonitor(store, options = {}) {
         });
         latest.statsUpdatedAt = todayIso();
       });
-      console.log(`[SofaScore] Estatisticas atualizadas em segundo plano: ${mergedCount} jogos em ${Math.round((Date.now() - started) / 1000)}s.`);
+      console.log(`[SofaScore] Estatisticas atualizadas em segundo plano: ${mergedCount}/${selectedGames.length} jogos selecionados em ${Math.round((Date.now() - started) / 1000)}s.`);
     } catch (error) {
       console.error(`[SofaScore] Falha ao atualizar estatisticas em segundo plano: ${error.message}`);
     } finally {
@@ -1161,22 +1205,80 @@ function router(store) {
     const data = store.read();
     normalizeData(data);
     const user = getCurrentUser(data, req);
-    const liveEntries = dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true })) || await getLiveEntriesDashboard();
+    const liveEntries = decorateLiveEntriesDashboard(
+      dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true }), {
+        monitoredEventIds: data.settings.sofascoreMonitoredEventIds
+      }) || await getLiveEntriesDashboard(),
+      data,
+      user
+    );
     res.render("app/live-entries", { title: "Entradas ao vivo", user, liveEntries });
   });
 
   app.get("/app/entradas-ao-vivo/dados", requireAuth, async (req, res) => {
     const data = store.read();
     normalizeData(data);
-    const liveEntries = dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true })) || await getLiveEntriesDashboard({ maxAgeMs: 5000 });
+    const user = getCurrentUser(data, req);
+    const liveEntries = decorateLiveEntriesDashboard(
+      dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true }), {
+        monitoredEventIds: data.settings.sofascoreMonitoredEventIds
+      }) || await getLiveEntriesDashboard({ maxAgeMs: 5000 }),
+      data,
+      user
+    );
     res.json(liveEntries);
   });
 
   app.post("/app/entradas-ao-vivo/atualizar", requireAuth, async (req, res) => {
     const data = store.read();
     normalizeData(data);
-    const liveEntries = dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true })) || await refreshLiveEntries();
+    const user = getCurrentUser(data, req);
+    const liveEntries = decorateLiveEntriesDashboard(
+      dashboardFromSofaScoreSnapshot(latestSofaScoreSnapshot(data, { onlyOk: true }), {
+        monitoredEventIds: data.settings.sofascoreMonitoredEventIds
+      }) || await refreshLiveEntries(),
+      data,
+      user
+    );
     res.json(liveEntries);
+  });
+
+  app.post("/app/entradas-ao-vivo/monitorar", requireAuth, requireAdmin, (req, res) => {
+    const eventId = String(req.body.eventId || "").trim();
+    const action = String(req.body.action || "toggle");
+    if (!eventId) return res.status(400).json({ error: "Jogo invalido para monitoramento." });
+    let liveEntries;
+    try {
+      store.update((data) => {
+        normalizeData(data);
+        const user = getCurrentUser(data, req);
+        const latest = latestSofaScoreSnapshot(data, { onlyOk: true });
+        const game = (latest?.games || []).find((item) => String(item.eventId || "") === eventId);
+        if (!game) throw new Error("Jogo nao encontrado no cache atual.");
+        const monitored = monitoredSofaScoreEventIds(data);
+        if (action === "remove" || (action === "toggle" && monitored.has(eventId))) {
+          monitored.delete(eventId);
+          game.stats = null;
+          game.statsMonitoring = false;
+        } else {
+          monitored.add(eventId);
+          game.statsMonitoring = true;
+        }
+        data.settings.sofascoreMonitoredEventIds = Array.from(monitored).slice(0, 50);
+        liveEntries = decorateLiveEntriesDashboard(
+          dashboardFromSofaScoreSnapshot(latest, { monitoredEventIds: data.settings.sofascoreMonitoredEventIds }),
+          data,
+          user
+        );
+        audit(data, user.id, monitored.has(eventId) ? "sofascore_monitor.enabled" : "sofascore_monitor.disabled", "sofascoreSnapshots", latest?.id || null, {
+          eventId,
+          game: `${game.homeTeam} x ${game.awayTeam}`
+        }, req);
+      });
+      return res.json(liveEntries);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
   });
 
   app.get("/app/conta", requireAuth, (req, res) => {

@@ -596,8 +596,9 @@ function snapshot() {
   };
 }
 
-function dashboardFromSofaScoreSnapshot(snapshot) {
+function dashboardFromSofaScoreSnapshot(snapshot, options = {}) {
   if (!snapshot) return null;
+  const monitoredEventIds = new Set((options.monitoredEventIds || []).map((id) => String(id)).filter(Boolean));
   const matches = (snapshot.games || []).filter((game) => isSofaScoreLiveGame(game) && !isIgnoredCompetition(game)).map((game) => {
     const minute = Number(game.minute || 0) || minuteFromSofaScoreStatus(game.status) || minuteFromSofaScoreStatus(game.statusLabel);
     const homeScore = Number(game.homeScore ?? 0);
@@ -619,6 +620,7 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
     match.sofaScoreStatus = game.status || null;
     match.scoreboard = game.score || match.scoreboard;
     match.eventId = game.eventId || null;
+    match.statsMonitoring = monitoredEventIds.has(String(game.eventId || "")) || Boolean(game.statsMonitoring);
     match.statsEstimated = Boolean(match.stats?.estimated || match.stats?.unavailable || game.stats?.estimated || game.stats?.unavailable);
     return match;
   });
@@ -635,7 +637,8 @@ function dashboardFromSofaScoreSnapshot(snapshot) {
       matches: matches.length,
       live: matches.filter((match) => ["Ao vivo", "Intervalo"].includes(match.status)).length,
       signals: signals.length,
-      withStats: matches.filter((match) => !match.statsEstimated).length
+      withStats: matches.filter((match) => !match.statsEstimated).length,
+      monitored: monitoredEventIds.size
     }
   };
 }

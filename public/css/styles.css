@@ -2033,6 +2033,13 @@ select.is-invalid + .field-error {
   color: var(--muted);
 }
 
+.live-monitor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .live-error {
   margin: 0;
 }
@@ -3886,6 +3893,10 @@ th {
   .live-expanded-head > div:first-child,
   .live-expanded-head > div:last-child {
     text-align: left;
+  }
+
+  .live-monitor-actions {
+    justify-content: flex-start;
   }
 
   .live-stat-row {

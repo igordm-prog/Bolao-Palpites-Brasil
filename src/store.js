@@ -8,7 +8,8 @@ const initialData = {
     entryAdminFeePercent: 10,
     depositMinimum: 20,
     withdrawalMinimum: 20,
-    pixKey: "pix@bolaopalpitesbrasil.com.br"
+    pixKey: "pix@bolaopalpitesbrasil.com.br",
+    sofascoreMonitoredEventIds: []
   },
   users: [],
   pools: [],
